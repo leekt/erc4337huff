@@ -4,3 +4,9 @@
 [submodule "lib/foundry-huff"]
 	path = lib/foundry-huff
 	url = https://github.com/huff-language/foundry-huff
+[submodule "lib/huffmate"]
+	path = lib/huffmate
+	url = https://github.com/huff-language/huffmate
+[submodule "lib/I4337"]
+	path = lib/I4337
+	url = https://github.com/leekt/I4337
