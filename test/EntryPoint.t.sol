@@ -27,11 +27,15 @@ contract MinimalAccountTest is Test {
             preVerificationGas: 7,
             maxFeePerGas: 6,
             maxPriorityFeePerGas: 5,
-            paymasterAndData: abi.encodePacked("PAYMASTER_DATA"),
+            paymasterAndData: "PAYMASTER_DATA",
             signature: ""
         });
-        UserOperation[] memory ops = new UserOperation[](1);
+        UserOperation[] memory ops = new UserOperation[](2);
         ops[0] = userOp;
+        ops[1] = userOp;
+        console.log("ops");
+        console.logBytes(abi.encodeWithSelector(
+            entryPoint.handleOps.selector, ops, payable(address(0xdeadbeef))));
         entryPoint.handleOps(ops, payable(address(0xdeadbeef)));
     }
 }
