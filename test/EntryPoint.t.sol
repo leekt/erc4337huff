@@ -6,7 +6,7 @@ import "forge-std/Test.sol";
 import "forge-std/console.sol";
 import {IEntryPoint} from "lib/I4337/src/IEntryPoint.sol";
 import {UserOperation} from "lib/I4337/src/UserOperation.sol";
-import "solady/utils/ECDSA.sol";
+import "solady/src/utils/ECDSA.sol";
 
 interface AccountFactory {
     function createAccount(address owner, uint256 salt) external returns (address);
@@ -67,8 +67,8 @@ contract MinimalAccountTest is Test {
         UserOperation[] memory ops = new UserOperation[](2);
         ops[0] = userOp;
         ops[1] = userOp;
-        console.log("ops");
-        console.logBytes(abi.encodeWithSelector(entryPoint.handleOps.selector, ops, payable(address(0xdeadbeef))));
+        // console.log("ops");
+        // console.logBytes(abi.encodeWithSelector(entryPoint.handleOps.selector, ops, payable(address(0xdeadbeef))));
         entryPoint.handleOps(ops, payable(address(0xdeadbeef)));
     }
 }

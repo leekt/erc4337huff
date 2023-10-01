@@ -152,8 +152,13 @@
 
 #define macro CALL_VALIDATE_ON_ACCOUNT() = takes(2) returns(2) {
   // [userOp_i_offset] 
-  // @TODO: CREATE USER OP HASH
+
+  // CREATE USEROP HASH
+  0xc0 mload 0x144 sha3
+  0x104 mstore // [userOp_i_offset]
+
   // @TODO: MISSING ACCOUNT FUNDS
+  
   0x00 // [retSize, userOp_i_offset]
   0x00 // [retOffset, retSize, userOp_i_offset]
   0xc0 mload 0x64 add // [UO_length, retOffset, retSize, userOp_i_offset]
@@ -180,7 +185,8 @@
 
 #define macro MAIN() = takes(0) returns(0) {
     0x00 calldataload 0xE0 shr
-    0x1fad948c eq handle_ops jumpi  // jump to handleOps
+    dup1 0x1fad948c eq handle_ops jumpi  // jump to handleOps
+    0xa6193531 eq getUserOpHash jumpi
     
     handle_ops:
       0x44                          // [userOps_offset]
@@ -219,6 +225,13 @@
         0x01 add 0xa0 mstore          // [newCursor, userOps_offset]
         0x20 add                      // [userOp_i_offset]
         execution_phase_internal jump
+    getUserOpHash:
+      0x24
+      COPY_USEROP()
+      0x04 calldatasize sub
+      0x144 sha3
+      0x00 mstore 
+      0x20 0x00 return
     finish:
       stop
     invalidUserOp:
