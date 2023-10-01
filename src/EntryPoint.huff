@@ -124,6 +124,7 @@
   call // [success, userOp_i_offset]
   iszero invalidUserOp jumpi // [userOp_i_offset]
   0x00 mload 0x00 eq iszero invalidUserOp jumpi // [userOp_i_offset]
+  // @TODO validate the return value
 }
 
 #define macro CALL_EXECUTE_ON_ACCOUNT() = takes(2) returns(2) {
