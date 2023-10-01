@@ -127,6 +127,7 @@
 
 #define macro CREATE_ACCOUNT() = takes(2) returns(2) {
   // [userOp_i_offset]
+  // @TODO: route account creation through senderCreator contract
   0x144 mload dup1 // [target, target, userOp_i_offset]
   extcodesize // [extcodesize, target, userOp_i_offset]
   iszero not accountDeployed jumpi // [target, userOp_i_offset]
