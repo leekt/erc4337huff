@@ -7,19 +7,24 @@ import "forge-std/console.sol";
 import {IEntryPoint} from "lib/I4337/src/IEntryPoint.sol";
 import {UserOperation} from "lib/I4337/src/UserOperation.sol";
 import {TestWallet} from "src/TestWallet.sol";
+import {TestPaymaster} from "src/TestPaymaster.sol";
 
 contract MinimalAccountTest is Test {
 
     IEntryPoint public entryPoint;
     TestWallet public wallet;
+    TestPaymaster public paymaster;
 
     function setUp() public {
         entryPoint = IEntryPoint(
             HuffDeployer.deploy("EntryPoint"));
         wallet = new TestWallet();
+        paymaster = new TestPaymaster();
     }
 
     function testValidateUserOp() public {
+        wallet.deposit{value: 1e18}(address(entryPoint));
+        paymaster.deposit{value: 1e18}(address(entryPoint));
         vm.warp(10000);
         UserOperation memory userOp = UserOperation({
             sender: address(wallet),
@@ -31,7 +36,7 @@ contract MinimalAccountTest is Test {
             preVerificationGas: 7,
             maxFeePerGas: 6,
             maxPriorityFeePerGas: 5,
-            paymasterAndData: "PAYMASTER_DATA",
+            paymasterAndData: abi.encodePacked(address(paymaster)),
             signature: ""
         });
         UserOperation[] memory ops = new UserOperation[](2);

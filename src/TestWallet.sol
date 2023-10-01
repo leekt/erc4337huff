@@ -9,6 +9,10 @@ contract TestWallet is IAccount {
         ret = _ret;
     }
 
+    function deposit(address entryPoint) external payable {
+        address(entryPoint).call{value: msg.value}("");
+    }
+
     function validateUserOp(
         UserOperation calldata userOp,
         bytes32 userOpHash,

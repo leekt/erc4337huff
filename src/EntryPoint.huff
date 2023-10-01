@@ -1,6 +1,7 @@
 // TODO getNonce(address _sender, uint192 _key);
 // TODO getUserOpHash(UserOperation calldata _op);
 // TODO function handleOps(UserOperation[] calldata ops, address payable beneficiary);
+// TODO support postOp
 
 // UserOp
 //struct UserOperation {
@@ -71,6 +72,42 @@
     GET_SLOT_FROM_KEYS(<mem_ptr>)   // [slot]
     sload                           // [value]
 }
+
+/// @notice Store an element from two keys
+#define macro STORE_ELEMENT_FROM_KEYS(mem_ptr) = takes(3) returns (0) {
+    // Input stack: [key1, key2, value]
+    GET_SLOT_FROM_KEYS(<mem_ptr>)   // [slot, value]
+    sstore                          // []
+}
+
+#define macro INCREASE_BALANCE() = takes (2) returns (0) {
+    // input stack: [value, to]
+    dup2                                                // [to, value, to]
+    [BALANCE_SLOT] LOAD_ELEMENT_FROM_KEYS(0x00)         // [balance, value, to]
+    add                                                 // [balance + value, to]
+    swap1                                               // [to, balance + value]
+    [BALANCE_SLOT] STORE_ELEMENT_FROM_KEYS(0x00)        // []
+}
+
+#define macro DECREASE_BALANCE() = takes(2) returns(0) {
+  // [value, address]
+    dup2 [BALANCE_SLOT] LOAD_ELEMENT_FROM_KEYS(0x00)        // [balance, value, from]
+    dup1                                                    // [balance, balance, value, from]
+    dup3                                                    // [value, balance, balance, value, from]
+    gt                                                      // [value > balance, balance, value, from]
+    iszero                                                  // [value <= balance, balance, value, from]
+    valid jumpi                                             // [balance, value, from]
+
+    // Insufficient balance
+    0x00 0x00 revert                                        // []
+
+    // Update the sender's balance.
+    valid:
+        sub                                                 // [balance - value, from]
+        swap2                                                // [from, balance - value]
+        [BALANCE_SLOT] STORE_ELEMENT_FROM_KEYS(0x00)        // []
+}
+
 // ---------- end huffmate
 
 #define macro GET_BALANCE() = takes(1) returns(1) {
@@ -81,7 +118,6 @@
 
 #define macro KECCAK_DYNAMIC() = takes(3) returns(2){
   // [OFFSET, UMO, UOO]
-    number pop
     dup2 0x140 add            // [UMO + 140, OFFSET, UMO, UOO]
     dup4                      // [UOO, UMO + 140, OFFSET, UMO, UOO]
     dup3 add calldataload     // [initcode_Offset, UMO+140, OFFSET, UMO, UOO]
@@ -175,7 +211,6 @@ need_more_balance:
     sub                         // [requiredFund - balance]
 return_missing_fund:
 }
-
 // TODO support aggregator
 #define macro VALIDATE_VALIDADTIONDATA() = takes(1) {
     // validationData = validAfter | validUntil | result
@@ -202,6 +237,7 @@ validation_success:
     validation_failed jumpi     // []
 }
 
+
 #define macro VALIDATE_PREPAYMENT() = takes(3) returns(0) {
     // [UMO, UOO, UOL]
     gas                         // [gas, UMO, UOO, UOL]
@@ -227,6 +263,10 @@ ok_prepayment:
     dup4 0xe0 add calldataload  // [maxFee, pvg + vgl * mul + cgl, gas, UMO, UOO, UOL]
     mul                         // [requiredPreFund, gas, UMO, UOO, UOL]
     CREATE_SENDER_IF_NEEDED()   // [rpf, gas, UMO, UOO, UOL]
+    dup1                        // [rpf, rpf, gas, UMO, UOO, UOL]
+    dup4                        // [UMO, rpf, rpf, gas, UMO, UOO, UOL]
+    0x160 add                   // [UMO + 0x160, rpf, rpf, gas, UMO, UOO, UOL]
+    mstore                      // [rpf, gas, UMO, UOO, UOL]
     // for marking NUMBER()
     MARK_NUMBER()
     // end marking NUMBER()
@@ -264,14 +304,57 @@ ok_prepayment:
     dup9 mload                  // [addr, value, argOffset, argSize, retOffset, retSize, ..]
     dup10 0xa0 add mload        // [vgl, addr, value, argOffset, argSize, retOffset, retSize, ..]
     call                        // [success, ..]
-    validate_success jumpi      // [..]
+    account_validate_success jumpi  // [..]
 // validate_reverted 
     0x20                        // [0x20, ..]
     dup4 [UMO_SIZE] add         // [retOffset, 0x20 ..]
     revert 
-validate_success:
+account_validate_success:
     dup4 [UMO_SIZE] add mload   // [validationData, ..]
     VALIDATE_VALIDADTIONDATA()  // [pz?, rpf, gas, UMO, UOO, UOL]
+    account_pay jumpi           // [rpf, gas, UMO, UOO, UOL]
+    // paymaster validation start
+    0xf465c77e 0xE0 shl         // [selector << , rpf, gas, UMO, UOO, UOL]
+    dup4 [UMO_SIZE] add         // [UMO+UMO_SIZE, selector rpf, gas, UMO, UOO, UOL]
+    swap1 dup2                  // [UMO+UMO_SIZE, selector, UMO+UMO_SIZE, rpf, gas, UMO, UOO, UOL]
+    mstore                      // [UMO+UMO_SIZE, rpf, gas, UMO, UOO, UOL]
+    0x04 add                    // [UMO+UMO_SIZE + 4, rpf, gas, UMO, UOO, UOL]
+    0x60 dup2 mstore            // [UMO+UMO_SIZE + 4, 0x60, UMO+UMO_SIZE + 4, rpf, gas, UMO, UOO, UOL]
+    0x20 add                    // [UMO+UMO_SIZE + 24, rpf, gas, UMO, UOO, UOL]
+    dup4 0x140 add mload        // [uoHash, UMO+UMO_SIZE + 24, rpf, gas, UMO, UOO, UOL]
+    dup2 mstore 0x20 add        // [UMO+UMO_SIZE + 44, rpf, gas, UMO, UOO, UOL]
+    swap1                       // [rpf, UMO+UMO_SIZE + 44, gas, UMO, UOO, UOL]
+    dup4 0x120 add mload        // [paymaster, rpf, ...]
+    dup2                        // [rpf, paymaster, rpf, ...]
+    DECREASE_BALANCE()          // [rpf, UMO+UMO_SIZE + 44, gas, UMO, UOO, UOL]
+    dup2                        // [UMO+UMO_SIZE + 44, missingFund, UMO+UMO_SIZE + 44, gas, UMO, UOO, UOL]
+    mstore                      // [UMO + UMO_SIZE + 44, gas, UMO, UOO, UOL]
+    0x20 add                    // [UMO + UMO_SIZE + 64, gas, UMO, UOO, UOL]
+    dup4                        // [UOO, UMO + UMO_SIZE + 64, gas, UMO, UOO, UOL]
+    dup6                        // [UOL, UOO, UMO + UMO_SIZE + 64, gas, UMO, UOO, UOL]
+    swap2                       // [UMO + UMO_SIZE + 64, UOO, UOL, gas, UMO, UOO, UOL]
+    calldatacopy                // [gas, UMO, UOO, UOL]
+    0x40                        // [retSize, ...]
+    dup3 [UMO_SIZE] add         // [retOffset, retSize, ..]
+    dup6                        // [UOL, retOffset, retSize, ..]
+    0x64 add                    // [UOL + 0x64, retOffset, retSize, ..]
+    dup5 [UMO_SIZE] add         // [argOffset, argSize, retOffset, retSize, ..]
+    0x00                        // [value, argOffset, argSize, retOffset, retSize, ..]
+    dup7 0x120 add mload        // [addr, value, argOffset, argSize, retOffset, retSize, ..]
+    dup8 0xa0 add mload         // [vgl, addr, value, argOffset, argSize, retOffset, retSize, ..]
+    call                        // [success, ..]
+    paymaster_validate_success jumpi // [gas, UMO, UOO, UOL]
+// paymaster validate reverted
+    0x20 0x20 revert
+paymaster_validate_success:
+    dup2 [UMO_SIZE] add 0x20 add mload // [validationData, gas, UMO, UOO, UOL]
+    VALIDATE_VALIDADTIONDATA()         // [gas, UMO, UOO, UOL]
+
+account_pay:                    // [rpf, gas, UMO, UOO, UOL]
+    dup3                        // [UMO, rpf, gas, UMO, UOO, UOL]
+    mload                       // [sender, rpf, gas, UMO, UOO, UOL]
+    swap1                       // [rpf, sender, gas, UMO, UOO, UOL]
+    DECREASE_BALANCE()          // [gas, UMO, UOO, UOL]
 
     pop pop pop pop pop pop     // temp to match stack size
     // []
@@ -310,11 +393,17 @@ return_uoo_uol:
 }
 
 #define macro MAIN() = takes(0) returns(0) {
+    calldatasize iszero deposit jumpi
     0x00 calldataload 0xE0 shr
     0x1fad948c eq handle_ops jumpi  // jump to handleOps
 
     0x00 0x20 revert
-    
+
+    deposit:
+      caller                        // [caller]
+      callvalue                     // [callvalue, caller]
+      INCREASE_BALANCE()
+      stop
     handle_ops:
       0x04 calldataload 0x04 add    // [userOps_offset]
       dup1                          // [userOps_offset, userOps_offset]
