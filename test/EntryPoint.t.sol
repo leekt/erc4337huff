@@ -8,12 +8,10 @@ import {IEntryPoint} from "lib/I4337/src/IEntryPoint.sol";
 import {UserOperation} from "lib/I4337/src/UserOperation.sol";
 
 contract MinimalAccountTest is Test {
-
     IEntryPoint public entryPoint;
 
     function setUp() public {
-        entryPoint = IEntryPoint(
-            HuffDeployer.deploy("EntryPoint"));
+        entryPoint = IEntryPoint(HuffDeployer.deploy("EntryPoint"));
     }
 
     function testValidateUserOp() public {
@@ -21,9 +19,9 @@ contract MinimalAccountTest is Test {
             sender: address(0xbeefdead),
             nonce: 100,
             initCode: "INIT_CODE",
-            callData: "CALL_DATA",
+            callData: abi.encodeWithSignature("execute(address,uint256,bytes)", address(0x69), 1 wei, ""),
             callGasLimit: 300,
-            verificationGasLimit: 8,
+            verificationGasLimit: 800,
             preVerificationGas: 7,
             maxFeePerGas: 6,
             maxPriorityFeePerGas: 5,
@@ -34,8 +32,7 @@ contract MinimalAccountTest is Test {
         ops[0] = userOp;
         ops[1] = userOp;
         console.log("ops");
-        console.logBytes(abi.encodeWithSelector(
-            entryPoint.handleOps.selector, ops, payable(address(0xdeadbeef))));
+        console.logBytes(abi.encodeWithSelector(entryPoint.handleOps.selector, ops, payable(address(0xdeadbeef))));
         entryPoint.handleOps(ops, payable(address(0xdeadbeef)));
     }
 }
