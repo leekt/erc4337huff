@@ -12,4 +12,4 @@ remappings = [
   "foundry-huff=lib/foundry-huff/src/",
 ]
 
-memory_limit = 43554432
+memory_limit = 83554432
