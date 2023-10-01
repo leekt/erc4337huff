@@ -27,7 +27,7 @@
 //      uint256 preVerificationGas;
 //      uint256 maxFeePerGas;
 //      uint256 maxPriorityFeePerGas;
-//      bytes32 hashPaymasterAndData;
+//      bytes32 hashPaymasterAndData; => address paymaster
 //      bytes32 userOpHash;
 //      uint256 prefund;
 //      uint256 contextOffset;
@@ -45,8 +45,39 @@
 // HandleOps methods Id : 0x1fad948c
 
 #define constant UMO_SIZE = 0x1c0
-
 #define constant USEROPHASH_LOCATION = 0x140
+#define constant BALANCE_SLOT = FREE_STORAGE_POINTER()
+#define constant APPROVAL_SLOT = FREE_STORAGE_POINTER()
+
+// --------- from huffmate
+/// @notice Given two keys (ie a slot and a key), hash them together, generating a slot for a secondary hashmap.
+#define macro GET_SLOT_FROM_KEYS(mem_ptr) = takes(2) returns (1) {
+    // Input stack: [slot, key]
+    // Load the data into memory.
+    <mem_ptr> 0x20 add  // [<mem_ptr> + 32, slot, key]
+    mstore              // [key]
+    <mem_ptr>           // [<mem_ptr>, key]
+    mstore              // []
+
+    // Hash the data, generating a slot.
+    0x40        // [64]
+    <mem_ptr>   // [<mem_ptr>, 64]
+    sha3        // [slot]
+}
+
+/// @notice Load an element onto the stack from two keys
+#define macro LOAD_ELEMENT_FROM_KEYS(mem_ptr) = takes(2) returns(1) {
+    // Input stack: [key1, key2]
+    GET_SLOT_FROM_KEYS(<mem_ptr>)   // [slot]
+    sload                           // [value]
+}
+// ---------- end huffmate
+
+#define macro GET_BALANCE() = takes(1) returns(1) {
+  // [address]
+  [BALANCE_SLOT] LOAD_ELEMENT_FROM_KEYS(0x00)
+  // [balance]
+}
 
 #define macro KECCAK_DYNAMIC() = takes(3) returns(2){
   // [OFFSET, UMO, UOO]
@@ -118,17 +149,171 @@ end_copy:
     pop                       // [UMO, UOO]
 }
 
-#define macro VALIDATE_PREPAYMENT() = takes(2) returns(2) {
-    // [UserOp_Calldata_Offset]
-    gas                       // [gas]
+#define macro MARK_NUMBER() = takes(0) returns(0) {
+    number
     pop
+}
+
+#define macro CREATE_SENDER_IF_NEEDED() = takes(4) returns(4) {
+// [gas, UMO, UOO]
+// TODO:
+    0x00                         
     pop
-    pop
+// [gas, UMO, UOO]
+}
+
+#define macro CALCULATE_MISSING_FUND() = takes(2) returns(1) {
+    // [user, requiredFund] 
+    GET_BALANCE()               // [balance, requiredFund]
+    dup1 dup3                   // [requiredFund, balance, balance, requiredFund]
+    gt                          // [requiredFund > balance, balance, requiredFund]
+    need_more_balance jumpi
+    pop pop 0x00                // [0]
+    return_missing_fund jump
+need_more_balance:
+    swap1
+    sub                         // [requiredFund - balance]
+return_missing_fund:
+}
+
+// TODO support aggregator
+#define macro VALIDATE_VALIDADTIONDATA() = takes(1) {
+    // validationData = validAfter | validUntil | result
+    // validationCode = block.timestamp | block.timsteamp | 0
+    // [validationData]
+    dup1                        // [vd, vd]
+    0x60 shl                    // [result, vd]
+    iszero                      // [success, vd]
+    validation_success jumpi    // [vd]
+validation_failed:
+// TODO: better logs
+    0x00 0x00 revert
+validation_success:
+    dup1                        // [vd, vd]
+    timestamp                   // [timestamp, vd, vd]
+    0xd0 shl                    // [timestamp << 0xd0, vd, vd]
+    gt                          // [timestamp > validAfter, vd]
+    iszero                      // [timestamp <= validAfter, vd]
+    validation_failed jumpi     // [vd]
+    0x01 swap1 sub                    // [vd -1] to handle infinite approval 
+    0x30 shl                    // [vd << 0x30]
+    timestamp 0xd0 shl          // [timestamp << 0xd0, vd << 0x30]
+    gt                          // [timestamp >= vd]
+    validation_failed jumpi     // []
+}
+
+#define macro VALIDATE_PREPAYMENT() = takes(3) returns(0) {
+    // [UMO, UOO, UOL]
+    gas                         // [gas, UMO, UOO, UOL]
+    dup3 0x80 add calldataload  // [cgl, gas, UMO, UOO, UOL]
+    dup4 0xa0 add calldataload  // [vgl, cgl, gas, UMO, UOO, UOL]
+    dup5 0xc0 add calldataload  // [pvg, vgl, cgl, gas, UMO, UOO, UOL]
+    dup6 0xe0 add calldataload  // [maxFee, pvg, vgl, cgl, gas, UMO, UOO, UOL]
+    dup7 0x100 add calldataload // [prioFee, maxFee, pvg, vgl, cgl, gas, UMO, UOO, UOL]
+    or or or or                 // [max, gas, UMO, UOO, UOL]
+    0x1000000000000000000000000000000 // [uint120.max, max, gas, UMO, UOO, UOL]
+    gt                          // [max < uint120, gas, UMO, UOO, UOL]
+    ok_prepayment jumpi
+revert_prepayment:
+    0x00 0x00 revert
+ok_prepayment:
+    // TODO: nonce check and increase
+    dup3 0x80 add calldataload  // [cgl, gas, UMO, UOO, UOL]
+    dup4 0xa0 add calldataload  // [vgl, cgl, gas, UMO, UOO, UOL]
+    dup4 0x120 add mload iszero // [no_paymaster, vgl, cgl, gas, UMO, UOO, UOL]
+    0x02 mul 0x03 sub mul       // [vgl * mul, cgl, gas, UMO, UOO, UOL]
+    dup5 0xc0 add calldataload  // [pvg, vgl * mul , cgl, gas, UMO, UOO, UOL]
+    add add                     // [pvg + vgl * mul + cgl, gas, UMO, UOO, UOL]
+    dup4 0xe0 add calldataload  // [maxFee, pvg + vgl * mul + cgl, gas, UMO, UOO, UOL]
+    mul                         // [requiredPreFund, gas, UMO, UOO, UOL]
+    CREATE_SENDER_IF_NEEDED()   // [rpf, gas, UMO, UOO, UOL]
+    // for marking NUMBER()
+    MARK_NUMBER()
+    // end marking NUMBER()
+    dup3 0x120 add              // [UMO + 0x120, rpf, gas, UMO, UOO, UOL]
+    mload                       // [paymasterAddr, rpf, gas, UMO, UOO, UOL]
+    iszero                      // [paymasterZero?, rpf, gas, UMO, UOO, UOL]
+    dup1                        // [pz?, pz? rpf, gas, UMO, UOO, UOL]
+    dup3 mul                    // [userPrefund, pz?, rpf, gas, UMO, UOO, UOL]
+    dup5                        // [UMO, upf, pz?, rpf, gas, UMO, UOO, UOL]
+    mload                       // [sender, upf, pz?, rpf, gas, UMO, UOO, UOL]
+    CALCULATE_MISSING_FUND()    // [missingFund, pz?, rpf, gas, UMO, UOO, UOL]
+    0x3a871cdd 0xE0 shl         // [selector << , missingFund, pz?, rpf, gas, UMO, UOO, UOL]
+    dup6 [UMO_SIZE] add         // [UMO+UMO_SIZE, selector, missingFund, pz?, rpf, gas, UMO, UOO, UOL]
+    swap1 dup2                  // [UMO+UMO_SIZE, selector, UMO+UMO_SIZE, missingFund, pz?, rpf, gas, UMO, UOO, UOL]
+    mstore                      // [UMO+UMO_SIZE, missingFund, pz?, rpf, gas, UMO, UOO, UOL]
+    0x04 add                    // [UMO+UMO_SIZE + 4, missingFund, pz?, rpf, gas, UMO, UOO, UOL]
+    0x60 dup2 mstore             // [UMO+UMO_SIZE + 4, 0x60, UMO+UMO_SIZE + 4, missingFund, pz?, rpf, gas, UMO, UOO, UOL]
+    0x20 add                    // [UMO+UMO_SIZE + 24, missingFund, pz?, rpf, gas, UMO, UOO, UOL]
+    dup6 0x140 add mload        // [uoHash, UMO+UMO_SIZE + 24, missingFund, pz?, rpf, gas, UMO, UOO, UOL]
+    dup2 mstore 0x20 add        // [UMO+UMO_SIZE + 44, missingFund, pz?, rpf, gas, UMO, UOO, UOL]
+    swap1                       // [missingFund, UMO+UMO_SIZE + 44, pz?, rpf, gas, UMO, UOO, UOL]
+    dup2                        // [UMO+UMO_SIZE + 44, missingFund, UMO+UMO_SIZE + 44, pz?, rpf, gas, UMO, UOO, UOL]
+    mstore                      // [UMO + UMO_SIZE + 44, pz?, rpf, gas,  UMO, UOO, UOL]
+    0x20 add                    // [UMO + UMO_SIZE + 64, pz?, rpf, gas, UMO, UOO, UOL]
+    dup6                        // [UOO, UMO + UMO_SIZE + 64, pz?, rpf, gas, UMO, UOO, UOL]
+    dup8                        // [UOL, UOO, UMO + UMO_SIZE + 64, pz?. rpf, gas, UMO, UOO, UOL]
+    swap2                       // [UMO + UMO_SIZE + 64, UOO, UOL, pz?, rpf, gas, UMO, UOO, UOL]
+    calldatacopy                // [pz?, rpf, gas, UMO, UOO, UOL]
+    0x20                        // [retSize, ...]
+    dup5 [UMO_SIZE] add         // [retOffset, retSize, ..]
+    dup8                        // [UOL, retOffset, retSize, ..]
+    0x64 add                    // [UOL + 0x64, retOffset, retSize, ..]
+    dup7 [UMO_SIZE] add         // [argOffset, argSize, retOffset, retSize, ..]
+    0x00                        // [value, argOffset, argSize, retOffset, retSize, ..]
+    dup9 mload                  // [addr, value, argOffset, argSize, retOffset, retSize, ..]
+    dup10 0xa0 add mload        // [vgl, addr, value, argOffset, argSize, retOffset, retSize, ..]
+    call                        // [success, ..]
+    validate_success jumpi      // [..]
+// validate_reverted 
+    0x20                        // [0x20, ..]
+    dup4 [UMO_SIZE] add         // [retOffset, 0x20 ..]
+    revert 
+validate_success:
+    dup4 [UMO_SIZE] add mload   // [validationData, ..]
+    VALIDATE_VALIDADTIONDATA()  // [pz?, rpf, gas, UMO, UOO, UOL]
+
+    pop pop pop pop pop pop     // temp to match stack size
+    // []
+}
+
+#define macro UOO_UOL() = takes(3) returns(5) {
+    //[userOp_i_offset, cursor_i, userOps_offset]
+    swap1                          // [cursor_i, userOP_i_offset, userOps_offset]
+    0x20 add                       // [cursor_i + 0x20, userOp_i_offset, userOps_offset]
+    swap1                          // [userOp_i_offset, cursor_i+1, userOps_offset]
+    0x80 mload                     // [opSize, userOp_i_offset, cursor_i+1, userOps_offset]
+    0xa0 mload                     // [i, opSize, userOp_i_offset, cursor_i+1, userOps_offset]
+    dup2 dup2                      // [i, opSize, i, opSize, userOp_i_offset, cursor_i+1, userOps_offset]
+    eq loop_end jumpi              // [i, opSize, userOp_i_offset, cursor_i+1, userOps_offset]
+    0x01 add                       // [i+1, opSize, userOp_i_offset, cursor_i+1, userOps_offset]
+    eq last_i jumpi                // [userOp_i_offset, cursor_i+1, userOps_offset]
+// not_last_i:
+    dup2                           // [cursor_i+1, userOp_i_offset, cursor_i+1, userOps_offset]
+    calldataload                   // [userOp_i+1_offset_rel, userOp_i_offset, cursor_i+1, userOps_offset]
+    dup4 add                       // [userOp_i+1_offset, userOp_i_offset, cursor_i+1, userOps_offset]
+    return_uoo_uol jump
+last_i:
+    calldatasize                   // [calldatasize, userOp_i_offset, cursor_i+1, userOps_offset]
+    return_uoo_uol jump
+loop_end:
+    pop pop pop pop                // [userOps_offset]
+    execution_phase jump
+return_uoo_uol:
+    // [userOp_i+1_offset, userOp_i_offset, cursor_i+1, userOps_offset]
+    swap1 // [userOp_i_offset, userOp_i+1_offset, cursor_i+1, userOps_offset]
+    dup1  // [userOp_i_offset, userOp_i_offset, userOp_i+1_offset, cursor_i+1, userOps_offset]
+    dup3  // [userOp_i+1_offset, userOp_i_offset, userOp_i_offset, userOp_i+1_offset, cursor_i+1, userOps_offset]
+    sub   // [userOp_i_length, userOp_i_offset, userOp_i+1_offset, cursor_i+1, userOps_offset]
+    swap1 // [userOp_i_offset, userOp_i_length, userOp_i+1_offset, cursor_i+1, userOps_offset]
+    // [userOp_i_offset, userOp_i_length, userOp_i+1_offset, cursor_i+1, userOps_offset]
 }
 
 #define macro MAIN() = takes(0) returns(0) {
     0x00 calldataload 0xE0 shr
     0x1fad948c eq handle_ops jumpi  // jump to handleOps
+
+    0x00 0x20 revert
     
     handle_ops:
       0x04 calldataload 0x04 add    // [userOps_offset]
@@ -137,19 +322,17 @@ end_copy:
       0x80 mstore                   // [userOps_offset]
       0x20 add                      // [userOps_offset]
       dup1                          // [cursor, userOps_offset]
+      dup1 calldataload             // [userOp_0_offset_rel, cursor, userOps_offset]
+      dup3 add                      // [userOp_0_offset, cursor, userOps_offset]
     loop_verification_phase:
-      dup1                          // [cursor, cursor, userOps_offset]
-      calldataload                  // [userOp_rel_offset, cursor, userOps_offset]
-      dup3 add                      // [userOp_i_offset, cursor, userOps_offset]
-      0x80 mload                    // [opSize, userOp_i_offset]
-      0xa0 mload                    // [current_i, opSize, userOp_i_offset]
-      eq execution_phase jumpi      // [userOp_i_offset]  
-      COPY_USEROP()                 // [userOp_i_memory_offset, userOp_i_calldata_offset]
-      VALIDATE_PREPAYMENT()
-      0xa0 mload                    
-      0x01 add 0xa0 mstore          // [cursor, userOps_offset]
-      0x20 add
+      UOO_UOL()                     // [userOp_i_calldata_offset, userOp_i_calldata_length, userOp_i+1_calldata_offset, nextCursor, userOps_offset]
+      COPY_USEROP()                 // [userOp_i_memory_offset, userOp_i_calldata_offset, userOp_i_calldata_length, userOp_i+1_calldata_offset, nextCursor, userOps_offset]
+      VALIDATE_PREPAYMENT()         // [userOp_i+1_calldata_offset, nextCursor, userOps_offset]
+      // i++
+      0xa0 mload
+      0x01 add 0xa0 mstore          // [userOp_i+1_calldata_offset, nextCursor, userOps_offset]
       loop_verification_phase jump
     execution_phase:
+      // [userOps_offset]
       stop
 }
