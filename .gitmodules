@@ -10,3 +10,6 @@
 [submodule "lib/I4337"]
 	path = lib/I4337
 	url = https://github.com/leekt/I4337
+[submodule "lib/MinimalAccount"]
+	path = lib/MinimalAccount
+	url = https://github.com/kopy-kat/MinimalAccount
