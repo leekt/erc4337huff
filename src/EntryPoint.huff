@@ -1,4 +1,4 @@
-// TODO getNonce(address _sender, uint192 _key);
+// TODO getonce(address _sender, uint192 _key);
 // TODO getUserOpHash(UserOperation calldata _op);
 // TODO function handleOps(UserOperation[] calldata ops, address payable beneficiary);
 // TODO support postOp
@@ -180,7 +180,7 @@
     0x20 add                  // [pmOffset + 0x20, pmOffset, UMO, UOO]
     calldataload              // [pm1Word, pmOffset, UMO, UOO]
     0x60 shr                  // [pmAddr, pmOffset, UMO, UOO]
-    dup3 0x120 add mstore      // [pmOffset, UMO, UOO]e
+    dup3 0x120 add mstore     // [pmOffset, UMO, UOO]
 end_copy:
     pop                       // [UMO, UOO]
 }
@@ -237,6 +237,12 @@ validation_success:
     validation_failed jumpi     // []
 }
 
+#define macro UPDATE_RPF() = takes(2) returns(0) {
+    // [UMO, rpf]
+    0x160 add                   // [UMO + 0x160, rpf]
+    mstore                      // []
+    // []
+}
 
 #define macro VALIDATE_PREPAYMENT() = takes(3) returns(0) {
     // [UMO, UOO, UOL]
@@ -265,8 +271,7 @@ ok_prepayment:
     CREATE_SENDER_IF_NEEDED()   // [rpf, gas, UMO, UOO, UOL]
     dup1                        // [rpf, rpf, gas, UMO, UOO, UOL]
     dup4                        // [UMO, rpf, rpf, gas, UMO, UOO, UOL]
-    0x160 add                   // [UMO + 0x160, rpf, rpf, gas, UMO, UOO, UOL]
-    mstore                      // [rpf, gas, UMO, UOO, UOL]
+    UPDATE_RPF()                // [rpf, gas, UMO, UOO, UOL]
     // for marking NUMBER()
     MARK_NUMBER()
     // end marking NUMBER()
@@ -349,14 +354,14 @@ account_validate_success:
 paymaster_validate_success:
     dup2 [UMO_SIZE] add 0x20 add mload // [validationData, gas, UMO, UOO, UOL]
     VALIDATE_VALIDADTIONDATA()         // [gas, UMO, UOO, UOL]
-
+    validate_payment_done jump
 account_pay:                    // [rpf, gas, UMO, UOO, UOL]
     dup3                        // [UMO, rpf, gas, UMO, UOO, UOL]
     mload                       // [sender, rpf, gas, UMO, UOO, UOL]
     swap1                       // [rpf, sender, gas, UMO, UOO, UOL]
     DECREASE_BALANCE()          // [gas, UMO, UOO, UOL]
-
-    pop pop pop pop pop pop     // temp to match stack size
+validate_payment_done:
+    pop pop pop pop             // temp to match stack
     // []
 }
 
