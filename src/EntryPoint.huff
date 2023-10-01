@@ -1,6 +1,7 @@
 // TODO getNonce(address _sender, uint192 _key);
 // TODO getUserOpHash(UserOperation calldata _op);
 // TODO function handleOps(UserOperation[] calldata ops, address payable beneficiary);
+#include "./UserOperation.huff"
 
 // UserOp
 //struct UserOperation {

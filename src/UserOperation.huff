@@ -1,0 +1,101 @@
+#include "./Hashmap.huff"
+
+#define constant NONCE_SLOT = FREE_STORAGE_POINTER()
+
+#define macro VERIFY_AND_INCREASE_NONCE() = takes(3) returns(0) {
+  // [UO_offset]
+  dup1           // [UO_offset, UO_offset]
+  GET_NONCE()    // [nonce, UO_offset]
+  dup1           // [nonce, nonce, UO_offset]
+  0x40 shr       // [key, nonce, UO_offset]
+  swap2          // [UO_offset, key, nonce]
+  GET_SENDER()   // [sender, key, nonce]
+  [NONCE_SLOT]   // [nonce_slot, sender, key, nonce]
+  GET_SLOT_FROM_KEYS_2D(0x00) // [2d_nonce_slot, nonce]
+  dup1                        // [2d_nonce_slot, 2d_nonce_slot, nonce]
+  sload                       // [current_nonce, 2d_nonce_slot, nonce]
+  dup3                        // [nonce, current_nonce, 2d_nonce_slot, nonce]
+  eq                          // [nonce == current_nonce, 2d_nonce_slot, nonce]
+  update_nonce jumpi          // [2d_nonce_slot, nonce]
+  0x00 0x00 revert
+  
+  update_nonce:
+    swap1 0x01 add swap1      // [2d_nonce_slot, nonce + 1]
+    sstore
+}
+
+#define macro GET_STATIC() = takes(2) returns(1) {
+  // [offset, UO_offset]
+  add calldataload
+  // [static_value]
+}
+
+#define macro MSTORE_DYNAMIC() = takes(3) returns(0) {
+  // [offset, UO_offset, mOffset]
+  dup2 add                            // [offset + UO_offset, UO_offset, mOffset]
+  calldataload                        // [suboffset, UO_offset, mOffset]
+  add                                 // [UO_offset + suboffset, mOffset]
+  dup1                                // [UO_offset + suboffset, UO_offset + suboffset, mOffset]
+  calldataload                        // [dynamic_length, UO_offset + suboffset, mOffset]
+  swap1                               // [suboffset + UO_offset, dynamic_length, mOffset]
+  0x20 add                            // [suboffset + UO_offset + 0x20, dynamic_length, mOffset]
+  swap2                               // [mOffset, offset + UO_offset + 0x20, dynamic_length]
+  calldatacopy
+}
+
+#define macro GET_SENDER() = takes(1) returns(1) {
+  // [UO_offset]
+  calldataload
+  // [sender]
+}
+
+#define macro GET_NONCE() = takes(1) returns(1) {
+  // [UO_offset]
+  0x20 GET_STATIC()
+  // [nonce]
+}
+
+#define macro GET_CALLGASLIMIT() = takes(1) returns(1) {
+  0x80 GET_STATIC()
+}
+
+#define macro GET_VERIFICATION_LIMIT() = takes(1) returns(1) {
+  0xa0 GET_STATIC()
+}
+
+#define macro GET_PRE_VERIFICATION_GAS() = takes(1) returns(1) {
+  0xc0 GET_STATIC()
+}
+
+#define macro GET_MAX_FEE_PER_GAS() = takes(1) returns(1) {
+  0xe0 GET_STATIC()
+}
+
+#define macro GET_MAX_PRIORITY_FEE_PER_GAS() = takes(1) returns(1) {
+  0x100 GET_STATIC()
+}
+
+#define macro MSTORE_INITCODE() = takes(2) returns(0) {
+  // [UO_offset, mOffset]
+  0x40 MSTORE_DYNAMIC()
+}
+
+#define macro MSTORE_CALLDATA() = takes(2) returns(0) {
+  // [UO_offset, mOffset]
+  0x60 MSTORE_DYNAMIC()
+}
+
+#define macro MSTORE_PAYMASTERDATA() = takes(2) returns(0) {
+  0x120 MSTORE_DYNAMIC()
+}
+
+#define macro GET_PAYMASTER() = takes(1) returns(1) {
+  // [ UO_offset ]
+  0x120 
+  dup2 add                            // [offset + UO_offset, UO_offset]
+  calldataload                        // [suboffset, UO_offset]
+  add                                 // [UO_offset + suboffset]
+  0x20 add                            // [suboffset + UO_offset + 0x20]
+  calldataload                        // [pm1Word]
+  0x60 shr                            // [pmAddr]
+}
