@@ -108,11 +108,12 @@
 
 #define macro COPY_USEROP() = takes(1) returns(2){
     // [UserOp_Offset]
-    0xa0 mload // [currentOpIndex, UserOp_Offset]]                    
+    0xa0 mload // [currentOpIndex, UserOp_Offset]]
+    0x20 mul                    
     0x64 add dup1 calldataload // [userOp_i_offset, currentOpIndex, UserOp_Offset]
     swap1 0x20 add calldataload sub // [userOp_i_length, UserOp_Offset]
     dup1 0xc0 mstore // [userOp_i_length, UserOp_Offset]
-    __RIGHTPAD(0x0825d1fc) 0xe0 mstore // [userOp_i_length, UserOp_Offset]
+    __RIGHTPAD(0x3a871cdd) 0xe0 mstore // [userOp_i_length, UserOp_Offset]
     0x60 0xe4 mstore // [userOp_i_length, UserOp_Offset]
     // NOTE: HASH IS STORED BY CALL_VALIDATE_ON_ACCOUNT
     // NOTE: MISSING ACCOUNT FUNDS IS STORED BY CALL_VALIDATE_ON_ACCOUNT
@@ -158,16 +159,17 @@
   0x104 mstore // [userOp_i_offset]
 
   // @TODO: MISSING ACCOUNT FUNDS
-  
+
   0x00 // [retSize, userOp_i_offset]
   0x00 // [retOffset, retSize, userOp_i_offset]
   0xc0 mload 0x64 add // [UO_length, retOffset, retSize, userOp_i_offset]
   0xe0 // [argOffset, argSize, retOffset, retSize, userOp_i_offset]
   0x00 // [value, argOffset, argSize, retOffset, retSize, userOp_i_offset]
   0x144 mload // [target, value, argOffset, argSize, retOffset, retSize, userOp_i_offset]
-  0xe4 mload // [gas, target, value, argOffset, argSize, retOffset, retSize, userOp_i_offset]
+  0x1e4 mload // [gas, target, value, argOffset, argSize, retOffset, retSize, userOp_i_offset]
   call // [success, userOp_i_offset]
   iszero invalidUserOp jumpi // [userOp_i_offset]
+  0x00 mload 0x00 eq iszero invalidUserOp jumpi
 }
 
 #define macro CALL_EXECUTE_ON_ACCOUNT() = takes(2) returns(2) {

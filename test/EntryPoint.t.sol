@@ -49,9 +49,9 @@ contract MinimalAccountTest is Test {
             initCode: abi.encodePacked(
                 address(factory), abi.encodeWithSelector(factory.createAccount.selector, address(this), 0)
                 ),
-            callData: abi.encodePacked(address(this), uint128(0), ""),
-            callGasLimit: 300,
-            verificationGasLimit: 800,
+            callData: abi.encodePacked(address(0x696969), uint128(0), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
             preVerificationGas: 7,
             maxFeePerGas: 6,
             maxPriorityFeePerGas: 5,
