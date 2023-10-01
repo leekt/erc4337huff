@@ -142,6 +142,7 @@
   dup1 0x34 add swap1 // [initCodeLengthSlot, initCodeStart, retOffset, retSize, target, userOp_i_offset]
   0x00 swap1 // [initCodeLengthSlot, value, initCodeStart, retOffset, retSize, target, userOp_i_offset]
   mload 0x60 shl // [target, value, initCodeStart, retOffset, retSize, target, userOp_i_offset]
+  0x00 mstore 0x20 0x00 return
   gas // [gas, target, value, initCodeStart, retOffset, retSize, target, userOp_i_offset]
   call // [success, target, userOp_i_offset]
   iszero invalidUserOp jumpi // [target, userOp_i_offset]
