@@ -13,3 +13,6 @@
 [submodule "lib/MinimalAccount"]
 	path = lib/MinimalAccount
 	url = https://github.com/kopy-kat/MinimalAccount
+[submodule "lib/solady"]
+	path = lib/solady
+	url = https://github.com/vectorized/solady
