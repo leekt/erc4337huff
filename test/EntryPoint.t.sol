@@ -8,6 +8,8 @@ import {UserOperation, UserOperationLib} from "account-abstraction/interfaces/Us
 import "solady/src/utils/ECDSA.sol";
 import {IEntryPoint, EntryPoint} from "account-abstraction/core/EntryPoint.sol";
 
+import "src/TestWalletFactory.sol";
+
 interface AccountFactory {
     function createAccount(address owner, uint256 salt) external returns (address);
     function getAddress(address owner, uint256 salt) external view returns (address);
@@ -25,7 +27,9 @@ struct Owner {
 
 contract MinimalAccountTest is Test {
     IEntryPoint public entryPoint;
-    AccountFactory public factory;
+    //AccountFactory public factory;
+    TestWalletFactory public walletFactory;
+
 
     EntryPoint public solidityEntryPoint = new EntryPoint();
 
@@ -39,9 +43,10 @@ contract MinimalAccountTest is Test {
         vm.etch(entrypointAddress, huffEntryPoint.code);
 
         owner = Owner({key: uint256(1), addr: vm.addr(uint256(1))});
+        walletFactory = new TestWalletFactory();
 
-        factory = AccountFactory(MINIMAL_ACCOUNT_FACTORY_ADDRESS);
-        vm.etch(address(factory), MINIMAL_ACCOUNT_FACTORY_BYTECODE);
+   //     factory = AccountFactory(MINIMAL_ACCOUNT_FACTORY_ADDRESS);
+   //     vm.etch(address(factory), MINIMAL_ACCOUNT_FACTORY_BYTECODE);
     }
 
     // function testValidateUserOpSingle() public {
@@ -102,6 +107,7 @@ contract MinimalAccountTest is Test {
         UserOperation[] memory ops = new UserOperation[](2);
         ops[0] = userOp;
         ops[1] = userOp;
+        ops[1].initCode = "";
         // console.log("ops");
         // console.logBytes(abi.encodeWithSelector(entryPoint.handleOps.selector, ops, payable(address(0xdeadbeef))));
         entryPoint.handleOps(ops, payable(address(0xdeadbeef)));
