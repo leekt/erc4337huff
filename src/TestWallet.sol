@@ -18,8 +18,6 @@ contract TestWallet is IAccount {
         bytes32 userOpHash,
         uint256 missingAccountFunds
     ) external returns (uint256 validationData) {
-        console.log("TestWallet: validateUserOp");
-        console.logBytes(msg.data);
         return ret;
     }
 }

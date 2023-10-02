@@ -3,6 +3,9 @@
 // TODO function handleOps(UserOperation[] calldata ops, address payable beneficiary);
 // TODO support postOp
 
+#include "./Balance.huff"
+
+
 // UserOp
 //struct UserOperation {
 //    address sender; UOO
@@ -50,72 +53,6 @@
 #define constant BALANCE_SLOT = FREE_STORAGE_POINTER()
 #define constant APPROVAL_SLOT = FREE_STORAGE_POINTER()
 
-// --------- from huffmate
-/// @notice Given two keys (ie a slot and a key), hash them together, generating a slot for a secondary hashmap.
-#define macro GET_SLOT_FROM_KEYS(mem_ptr) = takes(2) returns (1) {
-    // Input stack: [slot, key]
-    // Load the data into memory.
-    <mem_ptr> 0x20 add  // [<mem_ptr> + 32, slot, key]
-    mstore              // [key]
-    <mem_ptr>           // [<mem_ptr>, key]
-    mstore              // []
-
-    // Hash the data, generating a slot.
-    0x40        // [64]
-    <mem_ptr>   // [<mem_ptr>, 64]
-    sha3        // [slot]
-}
-
-/// @notice Load an element onto the stack from two keys
-#define macro LOAD_ELEMENT_FROM_KEYS(mem_ptr) = takes(2) returns(1) {
-    // Input stack: [key1, key2]
-    GET_SLOT_FROM_KEYS(<mem_ptr>)   // [slot]
-    sload                           // [value]
-}
-
-/// @notice Store an element from two keys
-#define macro STORE_ELEMENT_FROM_KEYS(mem_ptr) = takes(3) returns (0) {
-    // Input stack: [key1, key2, value]
-    GET_SLOT_FROM_KEYS(<mem_ptr>)   // [slot, value]
-    sstore                          // []
-}
-
-#define macro INCREASE_BALANCE() = takes (2) returns (0) {
-    // input stack: [value, to]
-    dup2                                                // [to, value, to]
-    [BALANCE_SLOT] LOAD_ELEMENT_FROM_KEYS(0x00)         // [balance, value, to]
-    add                                                 // [balance + value, to]
-    swap1                                               // [to, balance + value]
-    [BALANCE_SLOT] STORE_ELEMENT_FROM_KEYS(0x00)        // []
-}
-
-#define macro DECREASE_BALANCE() = takes(2) returns(0) {
-  // [value, address]
-    dup2 [BALANCE_SLOT] LOAD_ELEMENT_FROM_KEYS(0x00)        // [balance, value, from]
-    dup1                                                    // [balance, balance, value, from]
-    dup3                                                    // [value, balance, balance, value, from]
-    gt                                                      // [value > balance, balance, value, from]
-    iszero                                                  // [value <= balance, balance, value, from]
-    valid jumpi                                             // [balance, value, from]
-
-    // Insufficient balance
-    0x00 0x00 revert                                        // []
-
-    // Update the sender's balance.
-    valid:
-        sub                                                 // [balance - value, from]
-        swap2                                                // [from, balance - value]
-        [BALANCE_SLOT] STORE_ELEMENT_FROM_KEYS(0x00)        // []
-}
-
-// ---------- end huffmate
-
-#define macro GET_BALANCE() = takes(1) returns(1) {
-  // [address]
-  [BALANCE_SLOT] LOAD_ELEMENT_FROM_KEYS(0x00)
-  // [balance]
-}
-
 #define macro KECCAK_DYNAMIC() = takes(3) returns(2){
   // [OFFSET, UMO, UOO]
     dup2 0x140 add            // [UMO + 140, OFFSET, UMO, UOO]
@@ -147,11 +84,10 @@
   0x160 dup4 add mstore           // [userOpHash, UMO]
   0x140 dup3 add mstore           // [UMO]
   0x60 dup2 0x140 add sha3        // [finalUserOpHash, UMO]
-  0x140 dup3 add mstore           // [UMO]
   // [UMO]
 }
 
-#define macro COPY_USEROP() = takes(1) returns(2){ // returns UMO
+#define macro COPY_USEROP_MEMORY() = takes(1) returns(2) {
     // [UserOp_Offset]
     [UMO_SIZE]
     0xa0 mload                // [currentUserOp, 0x1a0, UOO]
@@ -160,6 +96,11 @@
     0x120 dup3                // [UOO, 0x120, UMO, UOO]
     dup3                      // [UMO, UOO, 0x120, UMO, UOO]
     calldatacopy              // [UMO, UOO]
+}
+
+#define macro COPY_USEROP() = takes(1) returns(2){ // returns UMO
+    // [UserOp_Offset]
+    COPY_USEROP_MEMORY()
     // keccak initCode
     // calldatacopy the initCode to UMO + 0x120
     0x40
@@ -168,7 +109,8 @@
     KECCAK_DYNAMIC()
     0x120
     KECCAK_DYNAMIC()
-    KECCAK_USEROP()           // [UMO, UOO]
+    KECCAK_USEROP()           // [UOHash, UMO, UOO]
+    0x140 dup3 add mstore     // [UMO, UOO]
     dup2                      // [UOO, UMO, UOO]
     0x120 add                 // [UOO + 0x120, UMO, UOO]
     calldataload              // [pmOffset_rel, UMO, UOO]
@@ -192,9 +134,6 @@ end_copy:
 
 #define macro CREATE_SENDER_IF_NEEDED() = takes(4) returns(4) {
 // [gas, UMO, UOO]
-// TODO:
-    0x00                         
-    pop
 // [gas, UMO, UOO]
 }
 
@@ -211,6 +150,7 @@ need_more_balance:
     sub                         // [requiredFund - balance]
 return_missing_fund:
 }
+
 // TODO support aggregator
 #define macro VALIDATE_VALIDADTIONDATA() = takes(1) {
     // validationData = validAfter | validUntil | result
@@ -244,6 +184,49 @@ validation_success:
     // []
 }
 
+#define macro GET_RPF() = takes(1) returns(0) {
+    // [UMO]
+    0x160 add mload
+    // [rpf]
+}
+
+#define macro DEBUG_MARKER() = takes(0) returns(0) {
+  timestamp
+  timestamp
+  coinbase
+  coinbase
+  pop
+  pop
+  pop
+  pop
+}
+
+// UserOp
+//struct UserOperation {
+//    address sender; UOO
+//    uint256 nonce; UOO+0x20
+//    bytes initCode; UOO+0x40
+//    bytes callData; UOO+0x60
+//    uint256 callGasLimit; UOO+0x80
+//    uint256 verificationGasLimit; UOO+0xa0
+//    uint256 preVerificationGas; UOO+0xc0
+//    uint256 maxFeePerGas; UOO+0xe0
+//    uint256 maxPriorityFeePerGas; UOO+0x100
+//    bytes paymasterAndData; UOO+0x120
+//    bytes signature; UOO+0x140
+//}
+
+#define macro CALCULATE_PREFUND() = takes(1) returns(1) {
+    //[UOO]
+    DEBUG_MARKER()
+    dup1 0x80 add calldataload  // [cgl, UOO]
+    dup2 0xa0 add calldataload  // [vgl, cgl, UOO]
+    dup3 0xc0 add calldataload // [pvg, cgl, vgl, UOO]
+    add add                     // [pvg + vgl + cgl, UOO]
+    swap1 0xe0 add calldataload  // [max, pvg + vgl + cgl]
+    mul                         // [max * (pvg + vgl + cgl)]
+}
+
 #define macro VALIDATE_PREPAYMENT() = takes(3) returns(0) {
     // [UMO, UOO, UOL]
     gas                         // [gas, UMO, UOO, UOL]
@@ -260,14 +243,8 @@ revert_prepayment:
     0x00 0x00 revert
 ok_prepayment:
     // TODO: nonce check and increase
-    dup3 0x80 add calldataload  // [cgl, gas, UMO, UOO, UOL]
-    dup4 0xa0 add calldataload  // [vgl, cgl, gas, UMO, UOO, UOL]
-    dup4 0x120 add mload iszero // [no_paymaster, vgl, cgl, gas, UMO, UOO, UOL]
-    0x02 mul 0x03 sub mul       // [vgl * mul, cgl, gas, UMO, UOO, UOL]
-    dup5 0xc0 add calldataload  // [pvg, vgl * mul , cgl, gas, UMO, UOO, UOL]
-    add add                     // [pvg + vgl * mul + cgl, gas, UMO, UOO, UOL]
-    dup4 0xe0 add calldataload  // [maxFee, pvg + vgl * mul + cgl, gas, UMO, UOO, UOL]
-    mul                         // [requiredPreFund, gas, UMO, UOO, UOL]
+    dup3                        // [UOO, gas, UMO, UOO, UOL]
+    CALCULATE_PREFUND()         // [rpf, gas, UMO, UOO, UOL]
     CREATE_SENDER_IF_NEEDED()   // [rpf, gas, UMO, UOO, UOL]
     dup1                        // [rpf, rpf, gas, UMO, UOO, UOL]
     dup4                        // [UMO, rpf, rpf, gas, UMO, UOO, UOL]

@@ -1,0 +1,62 @@
+/// @notice Given two keys (ie a slot and a key), hash them together, generating a slot for a secondary hashmap.
+#define macro GET_SLOT_FROM_KEYS(mem_ptr) = takes(2) returns (1) {
+    // Input stack: [slot, key]
+    // Load the data into memory.
+    <mem_ptr> 0x20 add  // [<mem_ptr> + 32, slot, key]
+    mstore              // [key]
+    <mem_ptr>           // [<mem_ptr>, key]
+    mstore              // []
+
+    // Hash the data, generating a slot.
+    0x40        // [64]
+    <mem_ptr>   // [<mem_ptr>, 64]
+    sha3        // [slot]
+}
+
+/// @notice Load an element onto the stack from two keys
+#define macro LOAD_ELEMENT_FROM_KEYS(mem_ptr) = takes(2) returns(1) {
+    // Input stack: [key1, key2]
+    GET_SLOT_FROM_KEYS(<mem_ptr>)   // [slot]
+    sload                           // [value]
+}
+
+/// @notice Store an element from two keys
+#define macro STORE_ELEMENT_FROM_KEYS(mem_ptr) = takes(3) returns (0) {
+    // Input stack: [key1, key2, value]
+    GET_SLOT_FROM_KEYS(<mem_ptr>)   // [slot, value]
+    sstore                          // []
+}
+
+#define macro INCREASE_BALANCE() = takes (2) returns (0) {
+    // input stack: [value, to]
+    dup2                                                // [to, value, to]
+    [BALANCE_SLOT] LOAD_ELEMENT_FROM_KEYS(0x00)         // [balance, value, to]
+    add                                                 // [balance + value, to]
+    swap1                                               // [to, balance + value]
+    [BALANCE_SLOT] STORE_ELEMENT_FROM_KEYS(0x00)        // []
+}
+
+#define macro DECREASE_BALANCE() = takes(2) returns(0) {
+  // [value, address]
+    dup2 [BALANCE_SLOT] LOAD_ELEMENT_FROM_KEYS(0x00)        // [balance, value, from]
+    dup1                                                    // [balance, balance, value, from]
+    dup3                                                    // [value, balance, balance, value, from]
+    gt                                                      // [value > balance, balance, value, from]
+    iszero                                                  // [value <= balance, balance, value, from]
+    valid jumpi                                             // [balance, value, from]
+
+    // Insufficient balance
+    0x00 0x00 revert                                        // []
+
+    // Update the sender's balance.
+    valid:
+        sub                                                 // [balance - value, from]
+        swap1                                                // [from, balance - value]
+        [BALANCE_SLOT] STORE_ELEMENT_FROM_KEYS(0x00)        // []
+}
+
+#define macro GET_BALANCE() = takes(1) returns(1) {
+  // [address]
+  [BALANCE_SLOT] LOAD_ELEMENT_FROM_KEYS(0x00)
+  // [balance]
+}

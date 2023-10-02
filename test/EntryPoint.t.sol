@@ -28,8 +28,21 @@ contract MinimalAccountTest is Test {
         vm.warp(10000);
         UserOperation memory userOp = UserOperation({
             sender: address(wallet),
-            nonce: 100,
+            nonce: 0,
             initCode: "INIT_CODE",
+            callData: "CALL_DATA",
+            callGasLimit: 60000,
+            verificationGasLimit: 50000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: abi.encodePacked(address(paymaster)),
+            signature: ""
+        });
+        UserOperation memory userOp2 = UserOperation({
+            sender: address(wallet),
+            nonce: 1,
+            initCode: "",
             callData: "CALL_DATA",
             callGasLimit: 60000,
             verificationGasLimit: 50000,
@@ -41,7 +54,8 @@ contract MinimalAccountTest is Test {
         });
         UserOperation[] memory ops = new UserOperation[](2);
         ops[0] = userOp;
-        ops[1] = userOp;
+        ops[1] = userOp2;
+        // 999999999998739958
 
         uint256 validAfter = block.timestamp - 10;
         uint256 validUntil = block.timestamp + 10;
