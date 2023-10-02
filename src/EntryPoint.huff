@@ -106,13 +106,46 @@
 //     pop                       // [UMO, UOO]
 // }
 
+#define macro GET_USEROP_HASH() = takes(0) returns(0) {
+      0xa0 mload // [currentOpIndex, UserOp_Offset]
+      0x20 mul                    
+      0x64 add dup1 calldataload // [userOp_i_offset, currentOpIndex, UserOp_Offset]
+      swap1 0x20 add calldataload sub // [userOp_i_length, UserOp_Offset]
+      dup2 0x144 // [memoryOffset, calldataOffset (UserOp_Offset), userOp_i_length, UserOp_Offset]
+      calldatacopy // [UserOp_Offset]
+
+      0x184 mload 0x144 add dup1 mload // [initCodeSize, initCodeSizeSlot]
+      swap1 0x20 add // [initCodeStartSlot, initCodeSize]
+      sha3 // [initCodeHash]
+      0x184 mstore
+
+      0x1a4 mload 0x144 add dup1 mload // [callDataSize, callDataSizeSlot]
+      swap1 0x20 add // [callDataSlot, callDataSize]
+      sha3 // [callDataHash]
+      0x1a4 mstore
+
+      0x264 mload 0x144 add dup1 mload // [paymasterDataSize,paymasterDataSizeSlot]
+      swap1 0x20 add // [paymasterDataSlot, paymasterDataSize]
+      sha3 // [paymasterDataHash]
+      0x264 mstore
+
+      0x140 0x144 sha3
+      0x00 mstore
+      address 0x20 mstore
+      chainid 0x40 mstore
+      0x60 0x00 sha3
+      0x104 mstore
+      0x20 0x104 return
+}
+
 #define macro COPY_USEROP() = takes(1) returns(2){
     // [UserOp_Offset]
-    0xa0 mload // [currentOpIndex, UserOp_Offset]]                    
+    0xa0 mload // [currentOpIndex, UserOp_Offset]]
+    0x20 mul                    
     0x64 add dup1 calldataload // [userOp_i_offset, currentOpIndex, UserOp_Offset]
     swap1 0x20 add calldataload sub // [userOp_i_length, UserOp_Offset]
     dup1 0xc0 mstore // [userOp_i_length, UserOp_Offset]
-    __RIGHTPAD(0x0825d1fc) 0xe0 mstore // [userOp_i_length, UserOp_Offset]
+    __RIGHTPAD(0x3a871cdd) 0xe0 mstore // [userOp_i_length, UserOp_Offset]
     0x60 0xe4 mstore // [userOp_i_length, UserOp_Offset]
     // NOTE: HASH IS STORED BY CALL_VALIDATE_ON_ACCOUNT
     // NOTE: MISSING ACCOUNT FUNDS IS STORED BY CALL_VALIDATE_ON_ACCOUNT
@@ -153,21 +186,20 @@
 #define macro CALL_VALIDATE_ON_ACCOUNT() = takes(2) returns(2) {
   // [userOp_i_offset] 
 
-  // CREATE USEROP HASH
-  0xc0 mload 0x144 sha3
-  0x104 mstore // [userOp_i_offset]
+  // @TODO: CREATE USEROP HASH
 
   // @TODO: MISSING ACCOUNT FUNDS
-  
+
   0x00 // [retSize, userOp_i_offset]
   0x00 // [retOffset, retSize, userOp_i_offset]
   0xc0 mload 0x64 add // [UO_length, retOffset, retSize, userOp_i_offset]
   0xe0 // [argOffset, argSize, retOffset, retSize, userOp_i_offset]
   0x00 // [value, argOffset, argSize, retOffset, retSize, userOp_i_offset]
   0x144 mload // [target, value, argOffset, argSize, retOffset, retSize, userOp_i_offset]
-  0xe4 mload // [gas, target, value, argOffset, argSize, retOffset, retSize, userOp_i_offset]
+  0x1e4 mload // [gas, target, value, argOffset, argSize, retOffset, retSize, userOp_i_offset]
   call // [success, userOp_i_offset]
   iszero invalidUserOp jumpi // [userOp_i_offset]
+  0x00 mload 0x00 eq iszero invalidUserOp jumpi
 }
 
 #define macro CALL_EXECUTE_ON_ACCOUNT() = takes(2) returns(2) {
@@ -200,9 +232,10 @@
       calldataload                  // [userOp_rel_offset, cursor, userOps_offset]
       dup3 add                      // [userOp_i_offset, cursor, userOps_offset]
       0x80 mload                    // [opSize, userOp_i_offset]
-      // @TODO: keep 0xa0 mload on stack to use below
+      // @TODO: keep [0xa0 mload] on stack to use below
       0xa0 mload                    // [current_i, opSize, userOp_i_offset]
       eq execution_phase jumpi      // [userOp_i_offset]
+      GET_USEROP_HASH()             // [userOp_i_offset]
       COPY_USEROP()                 // [userOp_i_offset]
       CREATE_ACCOUNT()              // [userOp_i_offset]
       CALL_VALIDATE_ON_ACCOUNT()    // [userOp_i_offset]
@@ -217,6 +250,7 @@
       0xa4
       execution_phase_internal:
         0x80 mload                    // [opSize, userOp_i_offset]
+        // @TODO: keep [0xa0 mload] on stack to use below
         0xa0 mload                    // [current_i, opSize, userOp_i_offset]
         eq finish jumpi               // [userOp_i_offset]
         COPY_USEROP()                 // [userOp_i_offset]
@@ -226,11 +260,31 @@
         0x20 add                      // [userOp_i_offset]
         execution_phase_internal jump
     getUserOpHash:
-      0x24
-      COPY_USEROP()
-      0x04 calldatasize sub
-      0x144 sha3
-      0x00 mstore 
+      0x04 calldatasize sub // [uoSize]
+      0x04 0x00 calldatacopy // []
+
+      0x64 calldataload 0x04 add calldataload
+      0x64 add dup1 calldataload // [initCodeSize, initCodeSizeSlot]
+      swap1 0x1c add // [initCodeStartSlot, initCodeSize]
+      sha3 // [initCodeHash]
+      0x60 mstore
+
+      0x84 calldataload 0x04 add dup1 calldataload // [callDataSize, callDataSizeSlot]
+      swap1 0x1c add // [callDataSlot, callDataSize]
+      sha3 // [callDataHash]
+      0x80 mstore
+
+      0x144 calldataload 0x04 add dup1 calldataload // [paymasterDataSize,paymasterDataSizeSlot]
+      swap1 0x1c add // [paymasterDataSlot, paymasterDataSize]
+      sha3 // [paymasterDataHash]
+      0x140 mstore
+
+      0x140 0x20 sha3
+      0x00 mstore
+      address 0x20 mstore
+      chainid 0x40 mstore
+      0x60 0x00 sha3
+      0x00 mstore
       0x20 0x00 return
     finish:
       stop

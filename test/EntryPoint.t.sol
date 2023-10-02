@@ -4,9 +4,9 @@ pragma solidity ^0.8.15;
 import "foundry-huff/HuffDeployer.sol";
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
-import {IEntryPoint} from "lib/I4337/src/IEntryPoint.sol";
-import {UserOperation} from "lib/I4337/src/UserOperation.sol";
+import {UserOperation, UserOperationLib} from "account-abstraction/interfaces/UserOperation.sol";
 import "solady/src/utils/ECDSA.sol";
+import {IEntryPoint, EntryPoint} from "account-abstraction/core/EntryPoint.sol";
 
 interface AccountFactory {
     function createAccount(address owner, uint256 salt) external returns (address);
@@ -26,6 +26,8 @@ struct Owner {
 contract MinimalAccountTest is Test {
     IEntryPoint public entryPoint;
     AccountFactory public factory;
+
+    EntryPoint public solidityEntryPoint = new EntryPoint();
 
     address entrypointAddress = 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789;
 
@@ -49,9 +51,9 @@ contract MinimalAccountTest is Test {
             initCode: abi.encodePacked(
                 address(factory), abi.encodeWithSelector(factory.createAccount.selector, address(this), 0)
                 ),
-            callData: abi.encodePacked(address(this), uint128(0), ""),
-            callGasLimit: 300,
-            verificationGasLimit: 800,
+            callData: abi.encodePacked(address(0x696969), uint128(0), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
             preVerificationGas: 7,
             maxFeePerGas: 6,
             maxPriorityFeePerGas: 5,
@@ -60,6 +62,7 @@ contract MinimalAccountTest is Test {
         });
 
         bytes32 opHash = entryPoint.getUserOpHash(userOp);
+        console.logBytes32(opHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner.key, ECDSA.toEthSignedMessageHash(opHash));
         bytes memory signature = abi.encodePacked(v, r, s);
         userOp.signature = signature;
@@ -70,5 +73,62 @@ contract MinimalAccountTest is Test {
         // console.log("ops");
         // console.logBytes(abi.encodeWithSelector(entryPoint.handleOps.selector, ops, payable(address(0xdeadbeef))));
         entryPoint.handleOps(ops, payable(address(0xdeadbeef)));
+    }
+
+    function testGetUserOpHash() public {
+        UserOperation memory userOp = UserOperation({
+            sender: factory.getAddress(address(this), 0),
+            nonce: 100,
+            initCode: abi.encodePacked(
+                address(factory), abi.encodeWithSelector(factory.createAccount.selector, address(this), 0)
+                ),
+            callData: abi.encodePacked(address(0x696969), uint128(0), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "PAYMASTER_DATA",
+            signature: ""
+        });
+
+        bytes32 opHash1 = entryPoint.getUserOpHash(userOp);
+        bytes32 opHash2 = keccak256(abi.encode(keccak256(pack(userOp)), entrypointAddress, block.chainid));
+
+        assertEq(opHash1, opHash2);
+    }
+
+    // Helper functions
+
+    function pack(UserOperation memory userOp) internal pure returns (bytes memory ret) {
+        address sender = userOp.sender;
+        uint256 nonce = userOp.nonce;
+        bytes32 hashInitCode = calldataKeccak(userOp.initCode);
+        bytes32 hashCallData = calldataKeccak(userOp.callData);
+        uint256 callGasLimit = userOp.callGasLimit;
+        uint256 verificationGasLimit = userOp.verificationGasLimit;
+        uint256 preVerificationGas = userOp.preVerificationGas;
+        uint256 maxFeePerGas = userOp.maxFeePerGas;
+        uint256 maxPriorityFeePerGas = userOp.maxPriorityFeePerGas;
+        bytes32 hashPaymasterAndData = calldataKeccak(userOp.paymasterAndData);
+
+        return abi.encode(
+            sender,
+            nonce,
+            hashInitCode,
+            hashCallData,
+            callGasLimit,
+            verificationGasLimit,
+            preVerificationGas,
+            maxFeePerGas,
+            maxPriorityFeePerGas,
+            hashPaymasterAndData
+        );
+    }
+
+    function calldataKeccak(bytes memory data) internal pure returns (bytes32 ret) {
+        assembly {
+            ret := keccak256(mload(0x00), mload(0x20))
+        }
     }
 }
