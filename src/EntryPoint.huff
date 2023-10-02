@@ -39,6 +39,10 @@
       0x20 mul                    
       0x64 add dup1 calldataload // [userOp_i_offset, currentOpIndex, UserOp_Offset]
       swap1 0x20 add calldataload sub // [userOp_i_length, UserOp_Offset]
+      GET_USEROP_HASH_RAW()
+}
+
+#define macro GET_USEROP_HASH_RAW() = takes(2) returns(1) {
       dup2 0x144 // [memoryOffset, calldataOffset (UserOp_Offset), userOp_i_length, UserOp_Offset]
       calldatacopy // [UserOp_Offset]
 
@@ -64,8 +68,32 @@
       0x60 0x00 sha3
       0x104 mstore
 }
+//      0x04 0x00 calldatacopy // []
+//
+//      0x64 calldataload 0x04 add calldataload
+//      0x64 add dup1 calldataload // [initCodeSize, initCodeSizeSlot]
+//      swap1 0x1c add // [initCodeStartSlot, initCodeSize]
+//      sha3 // [initCodeHash]
+//      0x60 mstore
+//
+//      0x84 calldataload 0x04 add dup1 calldataload // [callDataSize, callDataSizeSlot]
+//      swap1 0x1c add // [callDataSlot, callDataSize]
+//      sha3 // [callDataHash]
+//      0x80 mstore
+//
+//      0x144 calldataload 0x04 add dup1 calldataload // [paymasterDataSize,paymasterDataSizeSlot]
+//      swap1 0x1c add // [paymasterDataSlot, paymasterDataSize]
+//      sha3 // [paymasterDataHash]
+//      0x140 mstore
+//
+//      0x140 0x20 sha3
+//      0x00 mstore
+//      address 0x20 mstore
+//      chainid 0x40 mstore
+//      0x60 0x00 sha3
+//      0x00 mstore
 
-#define macro COPY_USEROP() = takes(1) returns(2){
+#define macro COPY_USEROP() = takes(1) returns(1){
     // [UserOp_Offset]
     0xa0 mload // [currentOpIndex, UserOp_Offset]]
     0x20 mul                    
@@ -79,12 +107,12 @@
     // 0xc0 mload 0x84 add 0xc0 return // example: return [0xc0 - end of UO]
 }
 
-#define macro VALIDATE_PREPAYMENT() = takes(2) returns(2) {
+#define macro VALIDATE_PREPAYMENT() = takes(1) returns(1) {
     // [userOp_i_offset]
     // @TODO
 }
 
-#define macro CREATE_ACCOUNT() = takes(2) returns(2) {
+#define macro CREATE_ACCOUNT() = takes(1) returns(1) {
   // [userOp_i_offset]
   // @TODO: route account creation through senderCreator contract
   0x144 mload 0x00 dup1 // [target, 0, target, userOp_i_offset]
@@ -105,11 +133,14 @@
   call // [success, target, userOp_i_offset]
   iszero invalidUserOp jumpi // [target, userOp_i_offset]
   0x00 mload eq iszero invalidUserOp jumpi // [userOp_i_offset]
+  accountCreated jump
 
   accountDeployed:
+    pop
+  accountCreated:
 }
 
-#define macro CALL_VALIDATE_ON_ACCOUNT() = takes(2) returns(2) {
+#define macro CALL_VALIDATE_ON_ACCOUNT() = takes(1) returns(1) {
   // [userOp_i_offset] 
 
   // @TODO: MISSING ACCOUNT FUNDS
@@ -127,7 +158,10 @@
   // @TODO validate the return value
 }
 
-#define macro CALL_EXECUTE_ON_ACCOUNT() = takes(2) returns(2) {
+#define macro CALL_VALIDATE_ON_PAYMASTER() = takes(1) returns(1) {
+}
+
+#define macro CALL_EXECUTE_ON_ACCOUNT() = takes(1) returns(1) {
   // [userOp_i_offset] 
   0x00 // [retSize, userOp_i_offset]
   0x00 // [retOffset, retSize, userOp_i_offset]
@@ -146,8 +180,7 @@
     0xa6193531 eq getUserOpHash jumpi
     
     handle_ops:
-      pop
-      0x44                          // [userOps_offset]
+      0x04 calldataload 0x04 add    // [userOps_offset]
       dup1                          // [userOps_offset, userOps_offset]
       calldataload                  // [userOps_length, userOps_offset]
       0x80 mstore                   // [userOps_offset]
@@ -164,12 +197,13 @@
       GET_USEROP_HASH()             // [userOp_i_offset]
       COPY_USEROP()                 // [userOp_i_offset]
       CREATE_ACCOUNT()              // [userOp_i_offset]
-      CALL_VALIDATE_ON_ACCOUNT()    // [userOp_i_offset]
       VALIDATE_PREPAYMENT()         // [userOp_i_offset]
-      pop 0x20 add                  // [newCalldataCursor, userOp_i_offset] 
-      0xa0 mload                    // [UOCursor, newCalldataCursor, userOp_i_offset] 
-      0x01 add 0xa0 mstore          // [newCalldataCursor, userOps_offset]
-      loop_verification_phase jump  // [newCalldataCursor, userOps_offset]
+      CALL_VALIDATE_ON_ACCOUNT()    // [userOp_i_offset]
+      CALL_VALIDATE_ON_PAYMASTER()  // [userOp_i_offset]
+      0xa0 mload                    // [cursor, userOp_i_offset]                    
+      0x01 add 0xa0 mstore          // [newCursor, userOps_offset]
+      0x20 add
+      loop_verification_phase jump
     execution_phase:
       0x00 0xa0 mstore
       pop
@@ -195,31 +229,12 @@
         swap1 0x20 add              // [cursor, userOps_offset]    
         execution_phase_internal jump
     getUserOpHash:
-      0x04 calldatasize sub // [uoSize]
-      0x04 0x00 calldatacopy // []
-
-      0x60 mload 0x20 add dup1 mload // [initCodeSize, initCodeSizeSlot]
-      swap1 0x20 add // [initCodeStartSlot, initCodeSize]
-      sha3 // [initCodeHash]
-      0x60 mstore
-
-      0x80 mload 0x20 add dup1 mload // [callDataSize, callDataSizeSlot]
-      swap1 0x20 add // [callDataSlot, callDataSize]
-      sha3 // [callDataHash]
-      0x80 mstore
-
-      0x140 mload 0x20 add dup1 mload // [paymasterDataSize,paymasterDataSizeSlot]
-      swap1 0x20 add // [paymasterDataSlot, paymasterDataSize]
-      sha3 // [paymasterDataHash]
-      0x140 mstore
-
-      0x140 0x20 sha3
-      0x00 mstore
-      address 0x20 mstore
-      chainid 0x40 mstore
-      0x60 0x00 sha3
-      0x00 mstore
-      0x20 0x00 return
+        0x04 calldataload     // [uoOffset]
+        0x04 add              // [uoOFfset_Calldata]
+        0x04 calldatasize sub // [uoOffset, uoSize]
+        GET_USEROP_HASH_RAW()
+        0x80 mstore
+        0x20 0x104 return
     finish:
       stop
     invalidUserOp:

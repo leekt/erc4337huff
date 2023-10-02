@@ -8,7 +8,6 @@ import {UserOperation, UserOperationLib} from "account-abstraction/interfaces/Us
 import "solady/src/utils/ECDSA.sol";
 import {IEntryPoint, EntryPoint} from "account-abstraction/core/EntryPoint.sol";
 
-import "src/TestWalletFactory.sol";
 
 interface AccountFactory {
     function createAccount(address owner, uint256 salt) external returns (address);
@@ -27,9 +26,7 @@ struct Owner {
 
 contract MinimalAccountTest is Test {
     IEntryPoint public entryPoint;
-    //AccountFactory public factory;
-    TestWalletFactory public walletFactory;
-
+    AccountFactory public factory;
 
     EntryPoint public solidityEntryPoint = new EntryPoint();
 
@@ -43,10 +40,9 @@ contract MinimalAccountTest is Test {
         vm.etch(entrypointAddress, huffEntryPoint.code);
 
         owner = Owner({key: uint256(1), addr: vm.addr(uint256(1))});
-        walletFactory = new TestWalletFactory();
 
-   //     factory = AccountFactory(MINIMAL_ACCOUNT_FACTORY_ADDRESS);
-   //     vm.etch(address(factory), MINIMAL_ACCOUNT_FACTORY_BYTECODE);
+        factory = AccountFactory(MINIMAL_ACCOUNT_FACTORY_ADDRESS);
+        vm.etch(address(factory), MINIMAL_ACCOUNT_FACTORY_BYTECODE);
     }
 
     // function testValidateUserOpSingle() public {
@@ -98,6 +94,19 @@ contract MinimalAccountTest is Test {
             paymasterAndData: "PAYMASTER_DATA",
             signature: ""
         });
+        UserOperation memory userOp2 = UserOperation({
+            sender: factory.getAddress(owner.addr, 0),
+            nonce: 1,
+            initCode: "",
+            callData: abi.encodePacked(address(0x696969), uint128(0), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "PAYMASTER_DATA",
+            signature: ""
+        });
 
         bytes32 opHash = entryPoint.getUserOpHash(userOp);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner.key, ECDSA.toEthSignedMessageHash(opHash));
@@ -106,8 +115,7 @@ contract MinimalAccountTest is Test {
 
         UserOperation[] memory ops = new UserOperation[](2);
         ops[0] = userOp;
-        ops[1] = userOp;
-        ops[1].initCode = "";
+        ops[1] = userOp2;
         // console.log("ops");
         // console.logBytes(abi.encodeWithSelector(entryPoint.handleOps.selector, ops, payable(address(0xdeadbeef))));
         entryPoint.handleOps(ops, payable(address(0xdeadbeef)));
@@ -131,15 +139,33 @@ contract MinimalAccountTest is Test {
         });
 
         bytes32 opHash1 = entryPoint.getUserOpHash(userOp);
-        bytes32 opHash2 = keccak256(abi.encode(keccak256(pack(userOp)), entrypointAddress, block.chainid));
+        bytes32 opHash2 = this.getUserOpHash(userOp);
 
         assertEq(opHash1, opHash2);
     }
 
     // Helper functions
+    function getSender(
+        UserOperation calldata userOp
+    ) internal pure returns (address) {
+        address data;
+        //read sender from userOp, which is first userOp member (saves 800 gas...)
+        assembly {
+            data := calldataload(userOp)
+        }
+        return address(uint160(data));
+    }
 
-    function pack(UserOperation memory userOp) internal pure returns (bytes memory ret) {
-        address sender = userOp.sender;
+    function hash(
+        UserOperation calldata userOp
+    ) internal pure returns (bytes32) {
+        return keccak256(pack(userOp));
+    }
+
+    function pack(
+        UserOperation calldata userOp
+    ) internal pure returns (bytes memory ret) {
+        address sender = getSender(userOp);
         uint256 nonce = userOp.nonce;
         bytes32 hashInitCode = keccak256(userOp.initCode);
         bytes32 hashCallData = keccak256(userOp.callData);
@@ -151,22 +177,28 @@ contract MinimalAccountTest is Test {
         bytes32 hashPaymasterAndData = keccak256(userOp.paymasterAndData);
 
         return abi.encode(
-            sender,
-            nonce,
-            hashInitCode,
-            hashCallData,
-            callGasLimit,
-            verificationGasLimit,
-            preVerificationGas,
-            maxFeePerGas,
-            maxPriorityFeePerGas,
+            sender, nonce,
+            hashInitCode, hashCallData,
+            callGasLimit, verificationGasLimit, preVerificationGas,
+            maxFeePerGas, maxPriorityFeePerGas,
             hashPaymasterAndData
         );
     }
 
-    function calldataKeccak(bytes memory data) internal pure returns (bytes32 ret) {
+    function getUserOpHash(
+        UserOperation calldata userOp
+    ) public view returns (bytes32) {
+        return
+            keccak256(abi.encode(hash(userOp), address(entryPoint), block.chainid));
+    }
+
+
+    function calldataKeccak(bytes calldata data) internal pure returns (bytes32 ret) {
         assembly {
-            ret := keccak256(mload(0x00), mload(0x20))
+            let mem := mload(0x40)
+            let len := data.length
+            calldatacopy(mem, data.offset, len)
+            ret := keccak256(mem, len)
         }
     }
 }
