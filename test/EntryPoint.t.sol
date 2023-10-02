@@ -44,37 +44,6 @@ contract MinimalAccountTest is Test {
         vm.etch(address(factory), MINIMAL_ACCOUNT_FACTORY_BYTECODE);
     }
 
-    // function testValidateUserOpSingle() public {
-    //     address account1 = factory.getAddress(owner.addr, 0);
-    //     vm.deal(account1, 1 ether);
-    //     UserOperation memory userOp = UserOperation({
-    //         sender: account1,
-    //         nonce: 0,
-    //         initCode: abi.encodePacked(
-    //             address(factory), abi.encodeWithSelector(factory.createAccount.selector, owner.addr, 0)
-    //             ),
-    //         callData: abi.encodePacked(address(0x696969), uint128(0), ""),
-    //         callGasLimit: 3_000,
-    //         verificationGasLimit: 800_000,
-    //         preVerificationGas: 7,
-    //         maxFeePerGas: 6,
-    //         maxPriorityFeePerGas: 5,
-    //         paymasterAndData: "PAYMASTER_DATA",
-    //         signature: ""
-    //     });
-
-    //     bytes32 opHash = entryPoint.getUserOpHash(userOp);
-    //     (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner.key, ECDSA.toEthSignedMessageHash(opHash));
-    //     bytes memory signature = abi.encodePacked(v, r, s);
-    //     userOp.signature = signature;
-
-    //     UserOperation[] memory ops = new UserOperation[](1);
-    //     ops[0] = userOp;
-    //     // console.log("ops");
-    //     // console.logBytes(abi.encodeWithSelector(entryPoint.handleOps.selector, ops, payable(address(0xdeadbeef))));
-    //     entryPoint.handleOps(ops, payable(address(0xdeadbeef)));
-    // }
-
     function testValidateUserOpBundle() public {
         address account1 = factory.getAddress(owner.addr, 0);
         vm.deal(account1, 1 ether);
@@ -94,6 +63,20 @@ contract MinimalAccountTest is Test {
             signature: ""
         });
 
+        UserOperation memory userOp2 = UserOperation({
+            sender: account1,
+            nonce: 0,
+            initCode: "",
+            callData: abi.encodePacked(address(0x696969), uint128(0), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "PAYMASTER_DATA",
+            signature: ""
+        });
+
         bytes32 opHash = entryPoint.getUserOpHash(userOp);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner.key, ECDSA.toEthSignedMessageHash(opHash));
         bytes memory signature = abi.encodePacked(v, r, s);
@@ -101,7 +84,7 @@ contract MinimalAccountTest is Test {
 
         UserOperation[] memory ops = new UserOperation[](2);
         ops[0] = userOp;
-        ops[1] = userOp;
+        ops[1] = userOp2;
         // console.log("ops");
         // console.logBytes(abi.encodeWithSelector(entryPoint.handleOps.selector, ops, payable(address(0xdeadbeef))));
         entryPoint.handleOps(ops, payable(address(0xdeadbeef)));
