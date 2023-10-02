@@ -45,11 +45,13 @@ contract MinimalAccountTest is Test {
     }
 
     function testValidateUserOp() public {
+        address account1 = factory.getAddress(owner.addr, 0);
+        vm.deal(account1, 1 ether);
         UserOperation memory userOp = UserOperation({
-            sender: factory.getAddress(address(this), 0),
-            nonce: 100,
+            sender: account1,
+            nonce: 0,
             initCode: abi.encodePacked(
-                address(factory), abi.encodeWithSelector(factory.createAccount.selector, address(this), 0)
+                address(factory), abi.encodeWithSelector(factory.createAccount.selector, owner.addr, 0)
                 ),
             callData: abi.encodePacked(address(0x696969), uint128(0), ""),
             callGasLimit: 3_000,
@@ -62,7 +64,6 @@ contract MinimalAccountTest is Test {
         });
 
         bytes32 opHash = entryPoint.getUserOpHash(userOp);
-        console.logBytes32(opHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner.key, ECDSA.toEthSignedMessageHash(opHash));
         bytes memory signature = abi.encodePacked(v, r, s);
         userOp.signature = signature;
@@ -77,10 +78,10 @@ contract MinimalAccountTest is Test {
 
     function testGetUserOpHash() public {
         UserOperation memory userOp = UserOperation({
-            sender: factory.getAddress(address(this), 0),
-            nonce: 100,
+            sender: factory.getAddress(owner.addr, 0),
+            nonce: 0,
             initCode: abi.encodePacked(
-                address(factory), abi.encodeWithSelector(factory.createAccount.selector, address(this), 0)
+                address(factory), abi.encodeWithSelector(factory.createAccount.selector, owner.addr, 0)
                 ),
             callData: abi.encodePacked(address(0x696969), uint128(0), ""),
             callGasLimit: 3_000,
@@ -100,17 +101,18 @@ contract MinimalAccountTest is Test {
 
     // Helper functions
 
-    function pack(UserOperation memory userOp) internal pure returns (bytes memory ret) {
+    function pack(UserOperation memory userOp) internal view returns (bytes memory ret) {
         address sender = userOp.sender;
         uint256 nonce = userOp.nonce;
-        bytes32 hashInitCode = calldataKeccak(userOp.initCode);
-        bytes32 hashCallData = calldataKeccak(userOp.callData);
+        bytes32 hashInitCode = keccak256(userOp.initCode);
+        console.logBytes32(hashInitCode);
+        bytes32 hashCallData = keccak256(userOp.callData);
         uint256 callGasLimit = userOp.callGasLimit;
         uint256 verificationGasLimit = userOp.verificationGasLimit;
         uint256 preVerificationGas = userOp.preVerificationGas;
         uint256 maxFeePerGas = userOp.maxFeePerGas;
         uint256 maxPriorityFeePerGas = userOp.maxPriorityFeePerGas;
-        bytes32 hashPaymasterAndData = calldataKeccak(userOp.paymasterAndData);
+        bytes32 hashPaymasterAndData = keccak256(userOp.paymasterAndData);
 
         return abi.encode(
             sender,
