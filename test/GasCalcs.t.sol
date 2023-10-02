@@ -24,7 +24,7 @@ struct Owner {
     uint256 key;
 }
 
-contract EntryPointTest is Test {
+contract GasCalcs is Test {
     IEntryPoint public entryPoint;
     AccountFactory public factory;
 
@@ -46,7 +46,8 @@ contract EntryPointTest is Test {
         vm.etch(address(factory), MINIMAL_ACCOUNT_FACTORY_BYTECODE);
     }
 
-    function testValidateUserOpBundle() public {
+    function testGasCalc1UO() public {
+        // huff entrypoint
         address account1 = factory.getAddress(owner.addr, 0);
         vm.deal(account1, 1 ether);
         UserOperation memory userOp = UserOperation({
@@ -61,7 +62,73 @@ contract EntryPointTest is Test {
             preVerificationGas: 7,
             maxFeePerGas: 6,
             maxPriorityFeePerGas: 5,
-            paymasterAndData: "PAYMASTER_DATA",
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        bytes32 opHash = entryPoint.getUserOpHash(userOp);
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(owner.key, ECDSA.toEthSignedMessageHash(opHash));
+        bytes memory signature = abi.encodePacked(v2, r2, s2);
+        userOp.signature = signature;
+
+        UserOperation[] memory ops = new UserOperation[](1);
+        ops[0] = userOp;
+        uint256 huffGas = gasleft();
+        entryPoint.handleOps(ops, payable(address(0xdeadbeef)));
+        huffGas = huffGas - gasleft();
+        console.log("huff gas: %s", huffGas);
+
+        // eth-infinitism entrypoint
+        address simpleAccount1 = simpleAccountFactory.getAddress(owner.addr, 0);
+        vm.deal(simpleAccount1, 1 ether);
+        UserOperation memory simpleAccountUserOp = UserOperation({
+            sender: simpleAccount1,
+            nonce: 0,
+            initCode: abi.encodePacked(
+                address(simpleAccountFactory),
+                abi.encodeWithSelector(simpleAccountFactory.createAccount.selector, owner.addr, 0)
+                ),
+            callData: abi.encodeWithSignature("execute(address,uint256,bytes)", address(0x696969), 1 wei, ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        bytes32 simpleAccountOpHash = solidityEntryPoint.getUserOpHash(simpleAccountUserOp);
+        (uint8 simpleAccountv2, bytes32 simpleAccountr2, bytes32 simpleAccounts2) =
+            vm.sign(owner.key, ECDSA.toEthSignedMessageHash(simpleAccountOpHash));
+        bytes memory simpleAccountSignature = abi.encodePacked(simpleAccountr2, simpleAccounts2, simpleAccountv2);
+        simpleAccountUserOp.signature = simpleAccountSignature;
+
+        UserOperation[] memory simpleAccountOps = new UserOperation[](1);
+        simpleAccountOps[0] = simpleAccountUserOp;
+        uint256 solidityGas = gasleft();
+        solidityEntryPoint.handleOps(simpleAccountOps, payable(address(0xdeadbeef)));
+        solidityGas = solidityGas - gasleft();
+        console.log("solidity gas: %s", solidityGas);
+    }
+
+    function testGasCalc2UO() public {
+        // huff entrypoint
+        address account1 = factory.getAddress(owner.addr, 0);
+        vm.deal(account1, 1 ether);
+        UserOperation memory userOp = UserOperation({
+            sender: account1,
+            nonce: 0,
+            initCode: abi.encodePacked(
+                address(factory), abi.encodeWithSelector(factory.createAccount.selector, owner.addr, 0)
+                ),
+            callData: abi.encodePacked(address(0x696969), uint128(1 wei), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
             signature: ""
         });
 
@@ -75,7 +142,7 @@ contract EntryPointTest is Test {
             preVerificationGas: 7,
             maxFeePerGas: 6,
             maxPriorityFeePerGas: 5,
-            paymasterAndData: "PAYMASTER_DATA",
+            paymasterAndData: "",
             signature: ""
         });
 
@@ -89,36 +156,69 @@ contract EntryPointTest is Test {
         bytes memory signature2 = abi.encodePacked(v, r, s);
         userOp2.signature = signature2;
 
-        UserOperation[] memory ops = new UserOperation[](2);
+        UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = userOp;
-        ops[1] = userOp2;
-        // console.log("ops");
-        // console.logBytes(abi.encodeWithSelector(entryPoint.handleOps.selector, ops, payable(address(0xdeadbeef))));
+        // ops[1] = userOp2;
+        uint256 huffGas = gasleft();
         entryPoint.handleOps(ops, payable(address(0xdeadbeef)));
-    }
+        huffGas = huffGas - gasleft();
+        console.log("huff gas: %s", huffGas);
 
-    function testGetUserOpHash() public {
-        UserOperation memory userOp = UserOperation({
-            sender: factory.getAddress(owner.addr, 0),
+        // eth-infinitism entrypoint
+        address simpleAccount1 = simpleAccountFactory.getAddress(owner.addr, 0);
+        vm.deal(simpleAccount1, 1 ether);
+        UserOperation memory simpleAccountUserOp = UserOperation({
+            sender: simpleAccount1,
             nonce: 0,
             initCode: abi.encodePacked(
-                address(factory), abi.encodeWithSelector(factory.createAccount.selector, owner.addr, 0)
+                address(simpleAccountFactory),
+                abi.encodeWithSelector(simpleAccountFactory.createAccount.selector, owner.addr, 0)
                 ),
-            callData: abi.encodePacked(address(0x696969), uint128(0), ""),
+            callData: abi.encodeWithSignature("execute(address,uint256,bytes)", address(0x696969), 1 wei, ""),
             callGasLimit: 3_000,
             verificationGasLimit: 800_000,
             preVerificationGas: 7,
             maxFeePerGas: 6,
             maxPriorityFeePerGas: 5,
-            paymasterAndData: "PAYMASTER_DATA",
+            paymasterAndData: "",
             signature: ""
         });
 
-        bytes32 opHash1 = entryPoint.getUserOpHash(userOp);
-        bytes32 opHash2 = keccak256(abi.encode(keccak256(pack(userOp)), entrypointAddress, block.chainid));
+        UserOperation memory simpleAccountUserOp2 = UserOperation({
+            sender: simpleAccount1,
+            nonce: 1,
+            initCode: "",
+            callData: abi.encodeWithSignature("execute(address,uint256,bytes)", address(0x696969), 1 wei, ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
 
-        assertEq(opHash1, opHash2);
+        bytes32 simpleAccountOpHash = solidityEntryPoint.getUserOpHash(simpleAccountUserOp);
+        (uint8 simpleAccountv2, bytes32 simpleAccountr2, bytes32 simpleAccounts2) =
+            vm.sign(owner.key, ECDSA.toEthSignedMessageHash(simpleAccountOpHash));
+        bytes memory simpleAccountSignature = abi.encodePacked(simpleAccountr2, simpleAccounts2, simpleAccountv2);
+        simpleAccountUserOp.signature = simpleAccountSignature;
+
+        bytes32 simpleAccountOpHash2 = solidityEntryPoint.getUserOpHash(simpleAccountUserOp2);
+        (uint8 simpleAccountv, bytes32 simpleAccountr, bytes32 simpleAccounts) =
+            vm.sign(owner.key, ECDSA.toEthSignedMessageHash(simpleAccountOpHash2));
+        bytes memory simpleAccountSignature2 = abi.encodePacked(simpleAccountr, simpleAccounts, simpleAccountv);
+        simpleAccountUserOp2.signature = simpleAccountSignature2;
+
+        UserOperation[] memory simpleAccountOps = new UserOperation[](1);
+        simpleAccountOps[0] = simpleAccountUserOp;
+        // simpleAccountOps[1] = simpleAccountUserOp2;
+        uint256 solidityGas = gasleft();
+        solidityEntryPoint.handleOps(simpleAccountOps, payable(address(0xdeadbeef)));
+        solidityGas = solidityGas - gasleft();
+        console.log("solidity gas: %s", solidityGas);
     }
+
     // Helper functions
 
     function pack(UserOperation memory userOp) internal pure returns (bytes memory ret) {
