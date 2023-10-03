@@ -65,11 +65,7 @@ contract GasCalcs is Test {
             paymasterAndData: "",
             signature: ""
         });
-
-        bytes32 opHash = entryPoint.getUserOpHash(userOp);
-        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(owner.key, ECDSA.toEthSignedMessageHash(opHash));
-        bytes memory signature = abi.encodePacked(v2, r2, s2);
-        userOp.signature = signature;
+        userOp.signature = getUOSignature(userOp);
 
         UserOperation[] memory ops = new UserOperation[](1);
         ops[0] = userOp;
@@ -97,12 +93,7 @@ contract GasCalcs is Test {
             paymasterAndData: "",
             signature: ""
         });
-
-        bytes32 simpleAccountOpHash = solidityEntryPoint.getUserOpHash(simpleAccountUserOp);
-        (uint8 simpleAccountv2, bytes32 simpleAccountr2, bytes32 simpleAccounts2) =
-            vm.sign(owner.key, ECDSA.toEthSignedMessageHash(simpleAccountOpHash));
-        bytes memory simpleAccountSignature = abi.encodePacked(simpleAccountr2, simpleAccounts2, simpleAccountv2);
-        simpleAccountUserOp.signature = simpleAccountSignature;
+        simpleAccountUserOp.signature = getSolidityUOSignature(simpleAccountUserOp);
 
         UserOperation[] memory simpleAccountOps = new UserOperation[](1);
         simpleAccountOps[0] = simpleAccountUserOp;
@@ -132,6 +123,8 @@ contract GasCalcs is Test {
             signature: ""
         });
 
+        userOp.signature = getUOSignature(userOp);
+
         UserOperation memory userOp2 = UserOperation({
             sender: account1,
             nonce: 1,
@@ -146,19 +139,11 @@ contract GasCalcs is Test {
             signature: ""
         });
 
-        bytes32 opHash = entryPoint.getUserOpHash(userOp);
-        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(owner.key, ECDSA.toEthSignedMessageHash(opHash));
-        bytes memory signature = abi.encodePacked(v2, r2, s2);
-        userOp.signature = signature;
+        userOp2.signature = getUOSignature(userOp2);
 
-        bytes32 opHash2 = entryPoint.getUserOpHash(userOp2);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner.key, ECDSA.toEthSignedMessageHash(opHash2));
-        bytes memory signature2 = abi.encodePacked(v, r, s);
-        userOp2.signature = signature2;
-
-        UserOperation[] memory ops = new UserOperation[](1);
+        UserOperation[] memory ops = new UserOperation[](2);
         ops[0] = userOp;
-        // ops[1] = userOp2;
+        ops[1] = userOp2;
         uint256 huffGas = gasleft();
         entryPoint.handleOps(ops, payable(address(0xdeadbeef)));
         huffGas = huffGas - gasleft();
@@ -183,6 +168,7 @@ contract GasCalcs is Test {
             paymasterAndData: "",
             signature: ""
         });
+        simpleAccountUserOp.signature = getSolidityUOSignature(simpleAccountUserOp);
 
         UserOperation memory simpleAccountUserOp2 = UserOperation({
             sender: simpleAccount1,
@@ -198,21 +184,375 @@ contract GasCalcs is Test {
             signature: ""
         });
 
-        bytes32 simpleAccountOpHash = solidityEntryPoint.getUserOpHash(simpleAccountUserOp);
-        (uint8 simpleAccountv2, bytes32 simpleAccountr2, bytes32 simpleAccounts2) =
-            vm.sign(owner.key, ECDSA.toEthSignedMessageHash(simpleAccountOpHash));
-        bytes memory simpleAccountSignature = abi.encodePacked(simpleAccountr2, simpleAccounts2, simpleAccountv2);
-        simpleAccountUserOp.signature = simpleAccountSignature;
+        simpleAccountUserOp2.signature = getSolidityUOSignature(simpleAccountUserOp2);
 
-        bytes32 simpleAccountOpHash2 = solidityEntryPoint.getUserOpHash(simpleAccountUserOp2);
-        (uint8 simpleAccountv, bytes32 simpleAccountr, bytes32 simpleAccounts) =
-            vm.sign(owner.key, ECDSA.toEthSignedMessageHash(simpleAccountOpHash2));
-        bytes memory simpleAccountSignature2 = abi.encodePacked(simpleAccountr, simpleAccounts, simpleAccountv);
-        simpleAccountUserOp2.signature = simpleAccountSignature2;
-
-        UserOperation[] memory simpleAccountOps = new UserOperation[](1);
+        UserOperation[] memory simpleAccountOps = new UserOperation[](2);
         simpleAccountOps[0] = simpleAccountUserOp;
-        // simpleAccountOps[1] = simpleAccountUserOp2;
+        simpleAccountOps[1] = simpleAccountUserOp2;
+        uint256 solidityGas = gasleft();
+        solidityEntryPoint.handleOps(simpleAccountOps, payable(address(0xdeadbeef)));
+        solidityGas = solidityGas - gasleft();
+        console.log("solidity gas: %s", solidityGas);
+    }
+
+    function testGasCalc10UO() public {
+        // huff entrypoint
+        address account1 = factory.getAddress(owner.addr, 0);
+        vm.deal(account1, 1 ether);
+        UserOperation memory userOp = UserOperation({
+            sender: account1,
+            nonce: 0,
+            initCode: abi.encodePacked(
+                address(factory), abi.encodeWithSelector(factory.createAccount.selector, owner.addr, 0)
+                ),
+            callData: abi.encodePacked(address(0x696969), uint128(1 wei), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        userOp.signature = getUOSignature(userOp);
+
+        UserOperation memory userOp2 = UserOperation({
+            sender: account1,
+            nonce: 1,
+            initCode: "",
+            callData: abi.encodePacked(address(0x696969), uint128(1 wei), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        userOp2.signature = getUOSignature(userOp2);
+
+        UserOperation memory userOp3 = UserOperation({
+            sender: account1,
+            nonce: 2,
+            initCode: "",
+            callData: abi.encodePacked(address(0x696969), uint128(1 wei), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        userOp3.signature = getUOSignature(userOp3);
+
+        UserOperation memory userOp4 = UserOperation({
+            sender: account1,
+            nonce: 3,
+            initCode: "",
+            callData: abi.encodePacked(address(0x696969), uint128(1 wei), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        userOp4.signature = getUOSignature(userOp4);
+
+        UserOperation memory userOp5 = UserOperation({
+            sender: account1,
+            nonce: 4,
+            initCode: "",
+            callData: abi.encodePacked(address(0x696969), uint128(1 wei), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        userOp5.signature = getUOSignature(userOp5);
+
+        UserOperation memory userOp6 = UserOperation({
+            sender: account1,
+            nonce: 5,
+            initCode: "",
+            callData: abi.encodePacked(address(0x696969), uint128(1 wei), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        userOp6.signature = getUOSignature(userOp6);
+
+        UserOperation memory userOp7 = UserOperation({
+            sender: account1,
+            nonce: 6,
+            initCode: "",
+            callData: abi.encodePacked(address(0x696969), uint128(1 wei), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        userOp7.signature = getUOSignature(userOp7);
+
+        UserOperation memory userOp8 = UserOperation({
+            sender: account1,
+            nonce: 7,
+            initCode: "",
+            callData: abi.encodePacked(address(0x696969), uint128(1 wei), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        userOp8.signature = getUOSignature(userOp8);
+
+        UserOperation memory userOp9 = UserOperation({
+            sender: account1,
+            nonce: 8,
+            initCode: "",
+            callData: abi.encodePacked(address(0x696969), uint128(1 wei), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        userOp9.signature = getUOSignature(userOp9);
+
+        UserOperation memory userOp10 = UserOperation({
+            sender: account1,
+            nonce: 9,
+            initCode: "",
+            callData: abi.encodePacked(address(0x696969), uint128(1 wei), ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        userOp10.signature = getUOSignature(userOp10);
+
+        UserOperation[] memory ops = new UserOperation[](10);
+        ops[0] = userOp;
+        ops[1] = userOp2;
+        ops[2] = userOp3;
+        ops[3] = userOp4;
+        ops[4] = userOp5;
+        ops[5] = userOp6;
+        ops[6] = userOp7;
+        ops[7] = userOp8;
+        ops[8] = userOp9;
+        ops[9] = userOp10;
+        uint256 huffGas = gasleft();
+        entryPoint.handleOps(ops, payable(address(0xdeadbeef)));
+        huffGas = huffGas - gasleft();
+        console.log("huff gas: %s", huffGas);
+
+        // eth-infinitism entrypoint
+        address simpleAccount1 = simpleAccountFactory.getAddress(owner.addr, 0);
+        vm.deal(simpleAccount1, 1 ether);
+        UserOperation memory simpleAccountUserOp = UserOperation({
+            sender: simpleAccount1,
+            nonce: 0,
+            initCode: abi.encodePacked(
+                address(simpleAccountFactory),
+                abi.encodeWithSelector(simpleAccountFactory.createAccount.selector, owner.addr, 0)
+                ),
+            callData: abi.encodeWithSignature("execute(address,uint256,bytes)", address(0x696969), 1 wei, ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+        simpleAccountUserOp.signature = getSolidityUOSignature(simpleAccountUserOp);
+
+        UserOperation memory simpleAccountUserOp2 = UserOperation({
+            sender: simpleAccount1,
+            nonce: 1,
+            initCode: "",
+            callData: abi.encodeWithSignature("execute(address,uint256,bytes)", address(0x696969), 1 wei, ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        simpleAccountUserOp2.signature = getSolidityUOSignature(simpleAccountUserOp2);
+
+        UserOperation memory simpleAccountUserOp3 = UserOperation({
+            sender: simpleAccount1,
+            nonce: 2,
+            initCode: "",
+            callData: abi.encodeWithSignature("execute(address,uint256,bytes)", address(0x696969), 1 wei, ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        simpleAccountUserOp3.signature = getSolidityUOSignature(simpleAccountUserOp3);
+
+        UserOperation memory simpleAccountUserOp4 = UserOperation({
+            sender: simpleAccount1,
+            nonce: 3,
+            initCode: "",
+            callData: abi.encodeWithSignature("execute(address,uint256,bytes)", address(0x696969), 1 wei, ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        simpleAccountUserOp4.signature = getSolidityUOSignature(simpleAccountUserOp4);
+
+        UserOperation memory simpleAccountUserOp5 = UserOperation({
+            sender: simpleAccount1,
+            nonce: 4,
+            initCode: "",
+            callData: abi.encodeWithSignature("execute(address,uint256,bytes)", address(0x696969), 1 wei, ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        simpleAccountUserOp5.signature = getSolidityUOSignature(simpleAccountUserOp5);
+
+        UserOperation memory simpleAccountUserOp6 = UserOperation({
+            sender: simpleAccount1,
+            nonce: 5,
+            initCode: "",
+            callData: abi.encodeWithSignature("execute(address,uint256,bytes)", address(0x696969), 1 wei, ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        simpleAccountUserOp6.signature = getSolidityUOSignature(simpleAccountUserOp6);
+
+        UserOperation memory simpleAccountUserOp7 = UserOperation({
+            sender: simpleAccount1,
+            nonce: 6,
+            initCode: "",
+            callData: abi.encodeWithSignature("execute(address,uint256,bytes)", address(0x696969), 1 wei, ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        simpleAccountUserOp7.signature = getSolidityUOSignature(simpleAccountUserOp7);
+
+        UserOperation memory simpleAccountUserOp8 = UserOperation({
+            sender: simpleAccount1,
+            nonce: 7,
+            initCode: "",
+            callData: abi.encodeWithSignature("execute(address,uint256,bytes)", address(0x696969), 1 wei, ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        simpleAccountUserOp8.signature = getSolidityUOSignature(simpleAccountUserOp8);
+
+        UserOperation memory simpleAccountUserOp9 = UserOperation({
+            sender: simpleAccount1,
+            nonce: 8,
+            initCode: "",
+            callData: abi.encodeWithSignature("execute(address,uint256,bytes)", address(0x696969), 1 wei, ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        simpleAccountUserOp9.signature = getSolidityUOSignature(simpleAccountUserOp9);
+
+        UserOperation memory simpleAccountUserOp10 = UserOperation({
+            sender: simpleAccount1,
+            nonce: 9,
+            initCode: "",
+            callData: abi.encodeWithSignature("execute(address,uint256,bytes)", address(0x696969), 1 wei, ""),
+            callGasLimit: 3_000,
+            verificationGasLimit: 800_000,
+            preVerificationGas: 7,
+            maxFeePerGas: 6,
+            maxPriorityFeePerGas: 5,
+            paymasterAndData: "",
+            signature: ""
+        });
+
+        simpleAccountUserOp10.signature = getSolidityUOSignature(simpleAccountUserOp10);
+
+        UserOperation[] memory simpleAccountOps = new UserOperation[](10);
+        simpleAccountOps[0] = simpleAccountUserOp;
+        simpleAccountOps[1] = simpleAccountUserOp2;
+        simpleAccountOps[2] = simpleAccountUserOp3;
+        simpleAccountOps[3] = simpleAccountUserOp4;
+        simpleAccountOps[4] = simpleAccountUserOp5;
+        simpleAccountOps[5] = simpleAccountUserOp6;
+        simpleAccountOps[6] = simpleAccountUserOp7;
+        simpleAccountOps[7] = simpleAccountUserOp8;
+        simpleAccountOps[8] = simpleAccountUserOp9;
+        simpleAccountOps[9] = simpleAccountUserOp10;
         uint256 solidityGas = gasleft();
         solidityEntryPoint.handleOps(simpleAccountOps, payable(address(0xdeadbeef)));
         solidityGas = solidityGas - gasleft();
@@ -221,35 +561,17 @@ contract GasCalcs is Test {
 
     // Helper functions
 
-    function pack(UserOperation memory userOp) internal pure returns (bytes memory ret) {
-        address sender = userOp.sender;
-        uint256 nonce = userOp.nonce;
-        bytes32 hashInitCode = keccak256(userOp.initCode);
-        bytes32 hashCallData = keccak256(userOp.callData);
-        uint256 callGasLimit = userOp.callGasLimit;
-        uint256 verificationGasLimit = userOp.verificationGasLimit;
-        uint256 preVerificationGas = userOp.preVerificationGas;
-        uint256 maxFeePerGas = userOp.maxFeePerGas;
-        uint256 maxPriorityFeePerGas = userOp.maxPriorityFeePerGas;
-        bytes32 hashPaymasterAndData = keccak256(userOp.paymasterAndData);
-
-        return abi.encode(
-            sender,
-            nonce,
-            hashInitCode,
-            hashCallData,
-            callGasLimit,
-            verificationGasLimit,
-            preVerificationGas,
-            maxFeePerGas,
-            maxPriorityFeePerGas,
-            hashPaymasterAndData
-        );
+    function getUOSignature(UserOperation memory userOp) public returns (bytes memory) {
+        bytes32 opHash = entryPoint.getUserOpHash(userOp);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner.key, ECDSA.toEthSignedMessageHash(opHash));
+        bytes memory signature = abi.encodePacked(v, r, s);
+        return signature;
     }
 
-    function calldataKeccak(bytes memory data) internal pure returns (bytes32 ret) {
-        assembly {
-            ret := keccak256(mload(0x00), mload(0x20))
-        }
+    function getSolidityUOSignature(UserOperation memory userOp) public returns (bytes memory) {
+        bytes32 opHash = solidityEntryPoint.getUserOpHash(userOp);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner.key, ECDSA.toEthSignedMessageHash(opHash));
+        bytes memory signature = abi.encodePacked(r, s, v);
+        return signature;
     }
 }

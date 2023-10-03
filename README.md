@@ -18,11 +18,48 @@ This repo contains a Huff-rewrite of the [ERC-4337 EntryPoint contract](https://
 | EntryPoint     | 275,991 | 332,073 | ...   |
 | -------------- | ------  | -----   | ----- |
 | Difference     | 180,632 | 227,376 | ...   |
+| % Difference   | 65%     | 68%     | ...   |
 
 ## Todo
 
 - [ ] Fix bugs
-- [ ] Gas estimations
+- [x] Gas estimations
+
+## Using this repo
+
+1. Clone this repo
+
+```
+git clone https://github.com/leekt/erc4337huff.git
+cd erc4337huff
+```
+
+2. Install dependencies
+
+Once you've cloned and entered into your repository, you need to install the necessary dependencies. In order to do so, simply run:
+
+```shell
+forge install
+```
+
+3. Build & Test
+
+To build and test your contracts, you can run:
+
+```shell
+forge build
+forge test
+```
+
+4. Run gas tests
+
+To run gas tests, you can run:
+
+```shell
+forge test --mc GasCalcs -vv
+```
+
+For more information on how to use Foundry, check out the [Foundry Github Repository](https://github.com/foundry-rs/foundry/tree/master/forge) and the [foundry-huff library repository](https://github.com/huff-language/foundry-huff).
 
 ## Acknowledgements
 
