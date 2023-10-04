@@ -22,8 +22,9 @@ This repo contains a Huff-rewrite of the [ERC-4337 EntryPoint contract](https://
 
 ## Todo
 
-- [ ] Fix bugs
 - [x] Gas estimations
+- [ ] Check nonces
+- [ ] Pay beneficiary
 
 ## Using this repo
 
