@@ -148,7 +148,7 @@
   0x00 // [retSize,  ...]
   0x00 // [retOffset, retSize,  ...]
   dup3 0x60 add calldataload
-  dup4 add dup1 calldataload dup1// [length, length, uoLenSlot]
+  dup4 add dup1 calldataload dup1 // [length, length, uoLenSlot]
   swap2 0x20 add // [uoSlot, length, length]
   0x144 calldatacopy // [length]
   0x144 // [argOffset, argSize, retOffset, retSize,  ...]
@@ -202,7 +202,7 @@
       execution_phase_internal:
         dup1                          // [cursor, cursor, userOps_offset]
         calldataload                  // [userOp_rel_offset, cursor, userOps_offset]
-        dup2 add                      // [userOp_i_offset, cursor, userOps_offset]
+        dup3 add                      // [userOp_i_offset, cursor, userOps_offset]
         0x80 mload                    // [opSize, userOp_i_offset]
         // @TODO: keep [0xa0 mload] on stack to use below
         0xa0 mload                    // [current_i, opSize, userOp_i_offset]
@@ -211,7 +211,6 @@
         pop 0x20 add                  // [newCalldataCursor, userOp_i_offset] 
         0xa0 mload                    // [UOCursor, newCalldataCursor, userOp_i_offset] 
         0x01 add 0xa0 mstore          // [newCalldataCursor, userOps_offset]
-        swap1 0x20 add              // [cursor, userOps_offset]    
         execution_phase_internal jump
     getUserOpHash:
       0x04 calldatasize sub // [uoSize]

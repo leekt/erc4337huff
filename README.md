@@ -12,13 +12,13 @@ This repo contains a Huff-rewrite of the [ERC-4337 EntryPoint contract](https://
 
 ## Gas calculations
 
-|                | 1 UO    | 2 UO    | 10 UO |
-| -------------- | ------- | ------- | ----- |
-| HuffEntryPoint | 95,359  | 104,697 | ...   |
-| EntryPoint     | 275,991 | 332,073 | ...   |
-| -------------- | ------  | -----   | ----- |
-| Difference     | 180,632 | 227,376 | ...   |
-| % Difference   | 65%     | 68%     | ...   |
+|                | 1 UO    | 2 UO    | 10 UO   |
+| -------------- | ------- | ------- | ------- |
+| HuffEntryPoint | 126,763 | 140,029 | 246,448 |
+| EntryPoint     | 281,212 | 342,545 | 833,895 |
+| -------------- | ------  | -----   | -----   |
+| Difference     | 154,449 | 202,516 | 587,447 |
+| % Difference   | 55%     | 60%     | 70%     |
 
 ## Todo
 

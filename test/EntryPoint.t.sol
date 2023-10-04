@@ -48,7 +48,7 @@ contract EntryPointTest is Test {
 
     function testValidateUserOpBundle() public {
         address account1 = factory.getAddress(owner.addr, 0);
-        vm.deal(account1, 1 ether);
+        vm.deal(account1, 10 ether);
         UserOperation memory userOp = UserOperation({
             sender: account1,
             nonce: 0,
@@ -56,7 +56,7 @@ contract EntryPointTest is Test {
                 address(factory), abi.encodeWithSelector(factory.createAccount.selector, owner.addr, 0)
                 ),
             callData: abi.encodePacked(address(0x696969), uint128(1 wei), ""),
-            callGasLimit: 3_000,
+            callGasLimit: 60_000,
             verificationGasLimit: 800_000,
             preVerificationGas: 7,
             maxFeePerGas: 6,
@@ -69,8 +69,8 @@ contract EntryPointTest is Test {
             sender: account1,
             nonce: 1,
             initCode: "",
-            callData: abi.encodePacked(address(0x696969), uint128(1 wei), ""),
-            callGasLimit: 3_000,
+            callData: abi.encodePacked(address(0x420), uint128(1 wei), ""),
+            callGasLimit: 60_000,
             verificationGasLimit: 800_000,
             preVerificationGas: 7,
             maxFeePerGas: 6,
