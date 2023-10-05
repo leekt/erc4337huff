@@ -72,6 +72,10 @@
 
 #define macro COPY_USEROP() = takes(1) returns(2){
     // [...]
+
+    __RIGHTPAD(0x3a871cdd) 0xe0 mstore // [...]
+    0x60 0xe4 mstore // [...]
+
     0xa0 mload // [currentOpIndex, ...]
     0x01 0x80 mload sub // [currentOpIndex, ...]
     eq lastUserOp jumpi // [...]
@@ -80,6 +84,8 @@
     swap1 sub // [currentUOSize, ...]
 
     mergeCalcs:
+
+    dup1 0xc0 mstore // [...]
 
     dup3 calldataload dup5 add // [calldataOffset (UserOp_Offset), currentUOSize, ...]
     0x144 // [memoryOffset, calldataOffset (UserOp_Offset), currentUOSize, ...]
@@ -120,33 +126,38 @@
 }
 
 #define macro CALL_VALIDATE_ON_ACCOUNT() = takes(2) returns(2) {
-  // [userOp_i_offset] 
+  // [...] 
 
   // @TODO: MISSING ACCOUNT FUNDS
 
-  0x20 // [retSize, userOp_i_offset]
-  0x00 // [retOffset, retSize, userOp_i_offset]
-  0xc0 mload 0x64 add // [UO_length, retOffset, retSize, userOp_i_offset]
-  0xe0 // [argOffset, argSize, retOffset, retSize, userOp_i_offset]
-  0x00 // [value, argOffset, argSize, retOffset, retSize, userOp_i_offset]
-  0x144 mload // [target, value, argOffset, argSize, retOffset, retSize, userOp_i_offset]
-  0x1e4 mload // [gas, target, value, argOffset, argSize, retOffset, retSize, userOp_i_offset]
-  call // [success, userOp_i_offset]
-  iszero invalidUserOp jumpi // [userOp_i_offset]
-  0x00 mload 0x00 eq iszero invalidUserOp jumpi // [userOp_i_offset]
+  0x20 // [retSize,  ...]
+  0x00 // [retOffset, retSize,  ...]
+  0xc0 mload 0x64 add // [UO_length, retOffset, retSize,  ...]
+  0xe0 // [argOffset, argSize, retOffset, retSize,  ...]
+  0x00 // [value, argOffset, argSize, retOffset, retSize,  ...]
+  0x144 mload // [target, value, argOffset, argSize, retOffset, retSize,  ...]
+  0x1e4 mload // [gas, target, value, argOffset, argSize, retOffset, retSize,  ...]
+  call // [success,  ...]
+  iszero invalidUserOp jumpi // [ ...]
+  0x00 mload 0x00 eq iszero invalidUserOp jumpi // [ ...]
 }
 
 #define macro CALL_EXECUTE_ON_ACCOUNT() = takes(2) returns(2) {
-  // [userOp_i_offset] 
-  0x00 // [retSize, userOp_i_offset]
-  0x00 // [retOffset, retSize, userOp_i_offset]
-  0x1a4 mload 0x144 add dup1 mload // [UO_length, calldataOffset, retOffset, retSize, userOp_i_offset]
-  swap1 0x20 add // [argOffset, argSize, retOffset, retSize, userOp_i_offset]
-  0x00 // [value, argOffset, argSize, retOffset, retSize, userOp_i_offset]
-  0x144 mload // [target, value, argOffset, argSize, retOffset, retSize, userOp_i_offset]
-  0xc4 mload // [gas, target, value, argOffset, argSize, retOffset, retSize, userOp_i_offset]
-  call // [success, userOp_i_offset]
-  iszero invalidUserOp jumpi // [userOp_i_offset]
+  // [ ...] 
+
+  0x00 // [retSize,  ...]
+  0x00 // [retOffset, retSize,  ...]
+  dup3 0x60 add calldataload
+  dup4 add dup1 calldataload dup1 // [length, length, uoLenSlot]
+  swap2 0x20 add // [uoSlot, length, length]
+  0x144 calldatacopy // [length]
+  0x144 // [argOffset, argSize, retOffset, retSize,  ...]
+  0x00 // [value, argOffset, argSize, retOffset, retSize,  ...]
+  dup6 calldataload // [target, value, argOffset, argSize, retOffset, retSize,  ...]
+  dup7 0x80 add calldataload // [gas, target, value, argOffset, argSize, retOffset, retSize,  ...]
+  call // [success,  ...]
+  pop
+  // iszero invalidUserOp jumpi // [ ...]
 }
 
 #define macro MAIN() = takes(0) returns(0) {
@@ -180,7 +191,6 @@
       0x01 add 0xa0 mstore          // [newCalldataCursor, userOps_offset]
       loop_verification_phase jump  // [newCalldataCursor, userOps_offset]
     execution_phase:
-      stop
       0x00 0xa0 mstore
       pop
       0x44                          // [userOps_offset]
@@ -192,17 +202,15 @@
       execution_phase_internal:
         dup1                          // [cursor, cursor, userOps_offset]
         calldataload                  // [userOp_rel_offset, cursor, userOps_offset]
-        dup2 add                      // [userOp_i_offset, cursor, userOps_offset]
+        dup3 add                      // [userOp_i_offset, cursor, userOps_offset]
         0x80 mload                    // [opSize, userOp_i_offset]
         // @TODO: keep [0xa0 mload] on stack to use below
         0xa0 mload                    // [current_i, opSize, userOp_i_offset]
         eq finish jumpi               // [userOp_i_offset]
-        COPY_USEROP()                 // [userOp_i_offset]
         CALL_EXECUTE_ON_ACCOUNT()     // [userOp_i_offset]
         pop 0x20 add                  // [newCalldataCursor, userOp_i_offset] 
         0xa0 mload                    // [UOCursor, newCalldataCursor, userOp_i_offset] 
         0x01 add 0xa0 mstore          // [newCalldataCursor, userOps_offset]
-        swap1 0x20 add              // [cursor, userOps_offset]    
         execution_phase_internal jump
     getUserOpHash:
       0x04 calldatasize sub // [uoSize]
